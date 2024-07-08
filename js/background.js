@@ -7,6 +7,7 @@ chrome.action.onClicked.addListener((tab) => {
 });
 
 import {
+  AutoTokenizer,
   AutoConfig,
   pipeline,
   layer_norm,
@@ -29,7 +30,14 @@ let settings = {
       quantized: false,
     },
   },
+  indexedDB: {
+    databaseName: "simcheck",
+    tableName: "all",
+    keyPath: "id",
+    version: 1,
+  },
 };
+
 let dataset = {
   key: "",
   docs: {},
@@ -65,24 +73,40 @@ function handleStorageChange(changes, namespace) {
 }
 chrome.storage.onChanged.addListener(handleStorageChange);
 
-async function getCacheStorageSize() {
-  const cacheNames = await caches.keys();
-  let totalSize = 0;
+function getObjectStoreNames(databaseName) {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(databaseName);
 
-  for (const cacheName of cacheNames) {
-    const cache = await caches.open(cacheName);
-    const requests = await cache.keys();
+    request.onsuccess = (event) => {
+      const db = event.target.result;
+      const objectStoreNames = Array.from(db.objectStoreNames);
+      resolve(objectStoreNames);
+    };
 
-    for (const request of requests) {
-      const response = await cache.match(request);
-      if (response) {
-        const blob = await response.blob();
-        totalSize += blob.size;
-      }
-    }
-  }
+    request.onerror = (event) => {
+      reject(event.target.error);
+    };
+  });
+}
 
-  return totalSize;
+async function downloadModel(port, name) {
+  let instance = await EmbeddingsPipeline.getInstance(
+    (x) => {
+      // We also add a progress callback to the pipeline so that we can
+      // track model downloading.
+      x["type"] = "loading";
+      port.postMessage(x);
+    },
+    "feature-extraction",
+    name,
+    settings.pipeline.options,
+  );
+  port.postMessage({
+    type: "loading",
+    status: "download",
+    task: "done",
+  });
+  return true;
 }
 
 class EmbeddingsPipeline {
@@ -104,7 +128,7 @@ class EmbeddingsPipeline {
     return this.instance;
   }
 }
-async function createEmbeddings(data) {
+async function createEmbeddings(data, port) {
   // Create a feature extraction pipeline
   let extractor = await EmbeddingsPipeline.getInstance(
     (x) => {
@@ -112,88 +136,69 @@ async function createEmbeddings(data) {
       // track model loading.
       //self.postMessage(x);
       x["type"] = "loading";
-      chrome.tabs.sendMessage(data.tabId, x, function (response) {
-        //console.log('Response from the tab:', response);
-      });
+      port.postMessage(x);
     },
     settings.pipeline.task,
     settings.pipeline.model,
     settings.pipeline.options,
   );
 
-  let docIds = Object.keys(data.docs);
-  let docsLength = docIds.length;
-  for (let index in docIds) {
-    let id = docIds[index];
-
+  let docsLength = data.docs.length;
+  for (let index in data.docs) {
     let text = data.selectedFields.reduce((accumulator, currentValue) => {
-      return `${accumulator}${data.docs[id][currentValue]} `;
+      return `${accumulator}${data.docs[index][currentValue]} `;
     }, "");
-
     let embedding = await extractor(text, {
       pooling: "cls",
     });
-    data.docs[id][settings.pipeline.model] = Array.from(embedding.data);
-    chrome.tabs.sendMessage(
-      data.tabId,
-      {
-        type: "loading",
-        status: "extracting embeddings",
-        name: "rows",
-        progress: (index / docsLength) * 100,
-      },
-      function (response) {
-        //console.log('Response from the tab:', response);
-      },
-    );
+    if (!data.docs[index]["embeddings"]) {
+      data.docs[index]["embeddings"] = {};
+      data.docs[index]["embeddings"][settings.pipeline.model] = embedding.data;
+    } else {
+      data.docs[index][settings.pipeline.model] = embedding.data;
+    }
+    let num = parseInt(index);
+    let progress = ((num + 1) / docsLength) * 100;
+    port.postMessage({
+      type: "loading",
+      status: "extracting embeddings",
+      name: "rows",
+      progress: progress,
+    });
   }
 
-  chrome.storage.local.set({ [dataset.key]: data.docs }, () => {
-    if (chrome.runtime.lastError) {
-      console.error("Error storing data:", chrome.runtime.lastError);
-    } else {
-      dataset.docs = data.docs;
-      chrome.runtime.sendMessage(
-        { type: "embeddings-stored", key: dataset.key },
-        (response) => {
-          console.log(response);
-        },
-      );
-    }
+  const db = await openDatabase();
+  await saveData(db, data.docs);
+
+  port.postMessage({
+    type: "embeddings-stored",
+    status: "embeddings stored",
+    task: "done",
   });
-
-  chrome.tabs.sendMessage(
-    data.tabId,
-    {
-      type: "loading",
-      status: "embedding",
-      task: "done",
-    },
-    function (response) {
-      //console.log('Response from the tab:', response);
-    },
-  );
-
-  /*
-  const matryoshka_dim = 768;
-  embeddings = layer_norm(embeddings, [embeddings.dims[1]])
-    .slice(null, [0, matryoshka_dim])
-    .normalize(2, -1);
-  */
-
-  /*
-  console.log(embeddings.tolist());
-
-  // Compute similarity scores
-  const [source_embeddings, ...document_embeddings] = embeddings.tolist();
-  const similarities = document_embeddings.map((x) =>
-    cos_sim(source_embeddings, x),
-  );
-  console.log(similarities);
-  */
 }
 
-async function searchData(sendResponse, text) {
+class TopK {
+  constructor(k) {
+    this.k = k;
+    this.topKElements = [];
+  }
+
+  add(element) {
+    if (this.topKElements.length < this.k) {
+      this.topKElements.push(element);
+      this.topKElements.sort((a, b) => b.score - a.score); // Sort descending by score
+    } else if (element.score > this.topKElements[this.k - 1].score) {
+      this.topKElements[this.k - 1] = element;
+      this.topKElements.sort((a, b) => b.score - a.score); // Sort descending by score
+    }
+  }
+
+  getTopK() {
+    return this.topKElements;
+  }
+}
+
+async function searchData(text) {
   // Create a feature extraction pipeline
   let extractor = await EmbeddingsPipeline.getInstance(
     (x) => {
@@ -201,9 +206,6 @@ async function searchData(sendResponse, text) {
       // track model loading.
       //self.postMessage(x);
       x["type"] = "loading";
-      chrome.tabs.sendMessage(data.tabId, x, function (response) {
-        //console.log('Response from the tab:', response);
-      });
     },
     settings.pipeline.task,
     settings.pipeline.model,
@@ -213,21 +215,45 @@ async function searchData(sendResponse, text) {
   let embedding = await extractor(text, {
     pooling: "cls",
   });
-  let searchVector = Array.from(embedding.data);
+  const queryVector = embedding.data;
+  const queryVectorLength = queryVector.length;
 
-  let scoreList = [];
-  Object.keys(dataset.docs).forEach((key) => {
-    let datasetVector = dataset.docs[key][settings.pipeline.model];
-    let score = cos_sim(datasetVector, searchVector);
-    let result = dataset.docs[key];
-    result["score"] = score;
-    scoreList.push(result);
-  });
+  const db = await openDatabase();
+  const transaction = db.transaction(
+    [settings.indexedDB.tableName],
+    "readonly",
+  );
+  const objectStore = transaction.objectStore(settings.indexedDB.tableName);
+  const request = objectStore.openCursor();
 
-  sendResponse({
-    status: 200,
-    statusText: "OK",
-    result: scoreList,
+  return new Promise((resolve, reject) => {
+    //let scoreList = [];
+    const topK = new TopK(10);
+
+    request.onsuccess = (event) => {
+      const cursor = event.target.result;
+      if (cursor) {
+        let doc = cursor.value;
+        const vectorValue = doc["embeddings"][settings.pipeline.model];
+
+        if (vectorValue.length == queryVectorLength) {
+          // Only add the vector to the results set if the vector is the same length as query.
+          const similarity = cos_sim(vectorValue, queryVector);
+          doc["score"] = parseFloat(similarity.toPrecision(2));
+          delete doc["embeddings"];
+          //scoreList.push(doc);
+          topK.add(doc);
+        }
+        cursor.continue();
+      } else {
+        resolve(topK.getTopK());
+      }
+    };
+
+    request.onerror = (event) => {
+      console.log(event.target.error);
+      reject(scoreList);
+    };
   });
 }
 
@@ -236,54 +262,176 @@ async function getModelData(model) {
   return data;
 }
 
+async function getNumberOfTokens(text) {
+  const tokenizer = await AutoTokenizer.from_pretrained(
+    settings.pipeline.model,
+  );
+  const { input_ids } = await tokenizer(text);
+  return input_ids.size;
+}
+
+function openDatabase() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(
+      settings.indexedDB.databaseName,
+      settings.indexedDB.version,
+    );
+
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains(settings.indexedDB.tableName)) {
+        db.createObjectStore(settings.indexedDB.tableName, {
+          keyPath: settings.indexedDB.keyPath,
+        });
+      }
+    };
+
+    request.onsuccess = (event) => {
+      resolve(event.target.result);
+    };
+
+    request.onerror = (event) => {
+      port.postMessage({
+        status: 500,
+        statusText: "error opening db",
+        error: event.target.error,
+      });
+      reject(event.target.error);
+    };
+  });
+}
+
+function getAllData(db) {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(
+      [settings.indexedDB.tableName],
+      "readonly",
+    );
+    const store = transaction.objectStore(settings.indexedDB.tableName);
+    const request = store.getAll();
+
+    request.onsuccess = (event) => {
+      resolve(event.target.result);
+    };
+
+    request.onerror = (event) => {
+      port.postMessage({
+        status: 500,
+        statusText: "error getting data",
+        error: event.target.error,
+      });
+      reject(event.target.error);
+    };
+  });
+}
+
+async function saveData(db, dataArray) {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(
+      [settings.indexedDB.tableName],
+      "readwrite",
+    );
+    let store = transaction.objectStore(settings.indexedDB.tableName);
+
+    transaction.oncomplete = () => {
+      console.log("save complete");
+      resolve();
+    };
+
+    transaction.onerror = (event) => {
+      reject(event.target.error);
+    };
+
+    let dataArrayLength = dataArray.length;
+    dataArray.forEach((data, index) => {
+      const request = store.put(data);
+      request.onerror = (event) => {
+        //errorMessage(`Error saving data: ${event.target.error}`);
+      };
+      request.onsuccess = (event) => {
+        /*
+        port.postMessage({
+          status: "storing",
+          name: settings.indexedDB.tableName,
+          progress: ((index + 1) / dataArrayLength) * 100,
+        });
+         */
+      };
+    });
+  });
+}
+
 // listen for messages, process it, and send the result back.
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log(message);
-
-  switch (message.action) {
-    case "search":
-      let result = searchData(sendResponse, message.text);
-      break;
-    case "data-stored":
-      dataset.key = message.key;
-      dataset.selectedFields = message.selectedFields;
-
-      chrome.storage.local.get(dataset.key, async (result) => {
-        if (chrome.runtime.lastError) {
-          sendResponse({
-            status: 500,
-            statusText: "Internal Server Error",
-            error: chrome.runtime.lastError,
+chrome.runtime.onConnect.addListener(function (port) {
+  if (port.name == "simcheck") {
+    port.onMessage.addListener(async function (message) {
+      switch (message.action) {
+        case "getNumberOfTokens":
+          let size = await getNumberOfTokens(message.text);
+          port.postMessage({
+            type: "numberOfTokens",
+            size: size,
           });
-        } else {
-          sendResponse({
+          break;
+        case "getObjectStoreNames":
+          try {
+            let objectStores = await getObjectStoreNames(
+              message.databaseName || settings.databaseName,
+            );
+            port.postMessage({
+              type: "objectStoreNames",
+              result: objectStores,
+            });
+          } catch (error) {
+            port.postMessage({
+              status: 500,
+              statusText: "Internal Server Error",
+              error: error,
+            });
+          }
+          break;
+        case "download":
+          let status = downloadModel(port, message.name);
+          break;
+        case "search":
+          let result = await searchData(message.text);
+          port.postMessage({
+            type: "serp",
+            result: result,
+          });
+          break;
+        case "data-stored":
+          settings.indexedDB = message.indexedDB;
+          const db = await openDatabase();
+          const tableData = await getAllData(db);
+          if (!tableData.length) {
+            port.postMessage({
+              status: 404,
+              statusText: "no data to embed",
+            });
+            break;
+          }
+          port.postMessage({
             status: 202,
             statusText: "Accepted",
-            error: null,
           });
-
-          // Process data
-          await createEmbeddings({
-            selectedFields: dataset.selectedFields,
-            key: dataset.key,
-            docs: result[dataset.key],
-            tabId: sender.tab.id,
+          await createEmbeddings(
+            {
+              selectedFields: message.selectedFields,
+              key: settings.indexedDB.keyPath,
+              docs: tableData,
+            },
+            port,
+          );
+          break;
+        default:
+          // not found
+          port.postMessage({
+            status: 404,
+            statusText: "Not Found",
           });
-
-          // clean up storage
-          //chrome.storage.local.remove(key);
-        }
-      });
-      break;
-    default:
-      //
-      sendResponse({
-        status: 404,
-        statusText: "Not Found",
-      });
+      }
+    });
+    return;
   }
-
-  // return true to indicate we will send a response asynchronously
-  // see https://stackoverflow.com/a/46628145 for more information
-  return true;
 });

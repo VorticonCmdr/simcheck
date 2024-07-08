@@ -17,6 +17,7 @@
   "action": {
     "default_title": "simcheck"
   },
+  "options_page": "html/options.html",
   "minimum_chrome_version": "92",
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'"

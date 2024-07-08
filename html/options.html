@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1, user-scalable=0"
+        />
+
+        <title>options | simcheck</title>
+
+        <link rel="stylesheet" href="/css/bootstrap.v5.3.min.css" />
+        <link
+            rel="stylesheet"
+            href="/bootstrap-icons-1.8.1/bootstrap-icons.css"
+        />
+        <link rel="stylesheet" href="/css/bootstrap-table.min.v1.22.4.css" />
+    </head>
+
+    <body style="background-color: #ebeff7">
+        <div class="container my-4">
+            <div class="row mb-2 mx-1">
+                <div class="progress px-0">
+                    <div
+                        id="progress"
+                        class="progress-bar"
+                        role="progressbar"
+                        style="width: 0%"
+                    >
+                        -
+                    </div>
+                </div>
+            </div>
+            <div class="row mb-2">
+                <h3>selected model:</h3>
+                <span id="selectedModel"></span>
+            </div>
+            <div class="row mb-2">
+                <h3>cached models</h3>
+                <table class="table table-striped table-hover mx-2">
+                    <thead>
+                        <tr>
+                            <th scope="col">model</th>
+                            <th scope="col">quantized</th>
+                            <th scope="col" class="text-end">size</th>
+                            <th scope="col"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="models"></tbody>
+                </table>
+            </div>
+            <div class="row mb-2">
+                <label for="model-name" class="form-label"
+                    >add model name</label
+                >
+                <div class="input-group">
+                    <span class="input-group-text" id="model-name-addon"
+                        >https://huggingface.co/</span
+                    >
+                    <input
+                        type="text"
+                        class="form-control"
+                        id="model-name"
+                        aria-describedby="model-name model-name-helptext"
+                        placeholder="sentence-transformers/all-MiniLM-L6-v2"
+                    />
+                    <button
+                        class="btn btn-outline-primary"
+                        type="button"
+                        id="download"
+                    >
+                        download
+                    </button>
+                </div>
+                <div class="form-text" id="model-name-helptext">
+                    You can find the models at
+                    <a
+                        href="https://huggingface.co/models?library=onnx,sentence-transformers&sort=trending"
+                        target="_blank"
+                        >Hugging Face</a
+                    >
+                </div>
+            </div>
+        </div>
+
+        <div id="deleteQuestion" class="modal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">confirm deletion of</h5>
+                        <button
+                            type="button"
+                            class="btn-close"
+                            data-bs-dismiss="modal"
+                            aria-label="Close"
+                        ></button>
+                    </div>
+                    <div class="modal-body">
+                        <span id="modelNameForDeletetion">-</span>
+                    </div>
+                    <div class="modal-footer">
+                        <button
+                            id="reallyDelete"
+                            type="button"
+                            class="btn btn-outline-danger"
+                        >
+                            delete
+                        </button>
+                        <button
+                            type="button"
+                            class="btn btn-secondary"
+                            data-bs-dismiss="modal"
+                        >
+                            cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script src="/js/jquery.min.v3.7.1.js"></script>
+        <script src="/js/bootstrap.bundle.v5.3.min.js"></script>
+
+        <script src="/js/options.js"></script>
+    </body>
+</html>
