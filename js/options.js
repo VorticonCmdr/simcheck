@@ -26,6 +26,9 @@ let settings = {
     tableName: "all",
     keyPath: "id",
   },
+  openai: {
+    key: "",
+  },
 };
 
 /*
@@ -131,6 +134,12 @@ async function getCachedOnnx() {
     return acc;
   }, Promise.resolve({}));
 
+  aggregated["openai/text-embedding-3-small"] = {
+    name: "openai/text-embedding-3-small",
+    size: 0,
+    quantized: "false",
+  };
+
   return aggregated;
 }
 
@@ -151,7 +160,11 @@ function formatBytes(bytes) {
 }
 
 function linkHuggingface(model) {
-  return `<a href="https://huggingface.co/${model}" target="_blank">${model}</a>`;
+  if (model.startsWith("openai")) {
+    return `<a href="https://platform.openai.com/docs/api-reference/embeddings" target="_blank">${model}</a>`;
+  } else {
+    return `<a href="https://huggingface.co/${model}" target="_blank">${model}</a>`;
+  }
 }
 
 async function generateModelsTable() {
@@ -162,11 +175,110 @@ async function generateModelsTable() {
       <td>${linkHuggingface(model.name)}</td>
       <td>${model.quantized}</td>
       <td class="text-end">${formatBytes(model.size)}</td>
-      <td class="text-center"><i class="bi bi-plugin text-primary me-1"></i><i class="bi bi-trash text-danger"></i></td>
+      <td class="text-center"><i class="bi bi-plugin text-primary me-1"></i></td>
+      <td class="text-center"><i class="bi bi-trash text-danger"></i></td>
     </tr>`;
     })
     .join("\n");
   $("#models").html(html);
+}
+
+function getObjectStoreNamesAndSizes(databaseName) {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(databaseName);
+
+    request.onsuccess = (event) => {
+      const db = event.target.result;
+      const objectStoreNames = Array.from(db.objectStoreNames);
+      const sizesPromises = objectStoreNames.map((storeName) =>
+        getObjectStoreSize(db, storeName),
+      );
+
+      Promise.all(sizesPromises)
+        .then((sizes) => {
+          const result = objectStoreNames.map((name, index) => ({
+            name,
+            size: sizes[index],
+          }));
+          db.close();
+          resolve(result);
+        })
+        .catch((error) => {
+          db.close();
+          reject(error);
+        });
+    };
+
+    request.onerror = (event) => {
+      reject(event.target.error);
+    };
+  });
+}
+function getObjectStoreSize(db, storeName) {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(storeName, "readonly");
+    const store = transaction.objectStore(storeName);
+    const request = store.count();
+
+    request.onsuccess = (event) => {
+      resolve(event.target.result);
+    };
+
+    request.onerror = (event) => {
+      reject(event.target.error);
+    };
+  });
+}
+async function generateObjectStoresTable() {
+  let objectStoreNamesAndSizes = await getObjectStoreNamesAndSizes(
+    settings.indexedDB.databaseName,
+  );
+
+  let html = objectStoreNamesAndSizes
+    .map((objectStore, i) => {
+      return `<tr data-name="${objectStore.name}">
+      <td>${objectStore.name}</td>
+      <td class="text-end">${objectStore.size.toLocaleString()}</td>
+      <td class="text-end"><i class="bi bi-trash text-danger"></i></td>
+    </tr>`;
+    })
+    .join("\n");
+  $("#objectStores").html(html);
+}
+function deleteObjectStore(databaseName, storeName) {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(databaseName);
+
+    request.onsuccess = (event) => {
+      const db = event.target.result;
+      const version = db.version + 1; // Increment the version
+      db.close();
+
+      // Open the database with the new version
+      const versionRequest = indexedDB.open(databaseName, version);
+
+      versionRequest.onupgradeneeded = (event) => {
+        const upgradeDb = event.target.result;
+        if (upgradeDb.objectStoreNames.contains(storeName)) {
+          upgradeDb.deleteObjectStore(storeName);
+          console.log(`Object store '${storeName}' deleted.`);
+        }
+      };
+
+      versionRequest.onsuccess = (event) => {
+        event.target.result.close();
+        resolve(`Object store '${storeName}' deleted.`);
+      };
+
+      versionRequest.onerror = (event) => {
+        reject(event.target.error);
+      };
+    };
+
+    request.onerror = (event) => {
+      reject(event.target.error);
+    };
+  });
 }
 
 async function getSettings() {
@@ -189,8 +301,21 @@ async function setSettings() {
 
 async function init() {
   $("#selectedModel").html(linkHuggingface(settings.pipeline.model));
+  $("#openaiKey").val(settings.openai.key);
+  $("#openaiKeyBtn").on("click", async function () {
+    settings.openai.key = $("#openaiKey").val().trim();
+    console.log(settings.openai.key);
+    if (!settings.openai.key) {
+      $("#openaiKey").addClass("border-danger border-2");
+      return;
+    }
+    await setSettings();
+    $("#openaiKey").addClass("border-success border-2");
+  });
 
   generateModelsTable();
+
+  generateObjectStoresTable();
 
   $("#download").on("click", function () {
     let name = $("#model-name").val();
@@ -200,7 +325,7 @@ async function init() {
     port.postMessage({ action: "download", name: name });
   });
 
-  $(document).on("click", ".bi-plugin", async function () {
+  $(document).on("click", "#modelsTable .bi-plugin", async function () {
     let trElement = $(this).closest("tr");
     let dataModelValue = trElement.data("model");
 
@@ -209,20 +334,39 @@ async function init() {
     location.reload();
   });
 
-  const deleteQuestionModal = new bootstrap.Modal(
-    document.getElementById("deleteQuestion"),
+  const deleteModelQuestionModal = new bootstrap.Modal(
+    document.getElementById("deleteModelQuestion"),
     {},
   );
-  $(document).on("click", ".bi-trash", async function () {
+  $(document).on("click", "#modelsTable .bi-trash", async function () {
     let trElement = $(this).closest("tr");
     let dataModelValue = trElement.data("model");
     $("#modelNameForDeletetion").text(dataModelValue);
-    $("#reallyDelete").data("model", dataModelValue);
-    deleteQuestionModal.show();
+    $("#reallyDeleteModel").data("model", dataModelValue);
+    deleteModelQuestionModal.show();
   });
   $("#reallyDelete").on("click", function () {
-    let model = $("#reallyDelete").data("model");
+    let model = $("#reallyDeleteModel").data("model");
     deleteCachedRequestsWithPrefix(`https://huggingface.co/${model}`);
-    deleteQuestionModal.hide();
+    deleteModelQuestionModal.hide();
+    location.reload();
+  });
+
+  const deleteObjectStoreQuestionModal = new bootstrap.Modal(
+    document.getElementById("deleteObjectStoreQuestion"),
+    {},
+  );
+  $(document).on("click", "#objectStoresTable .bi-trash", async function () {
+    let trElement = $(this).closest("tr");
+    let dataObjectStoreName = trElement.data("name");
+    $("#objectStoreNameForDeletetion").text(dataObjectStoreName);
+    $("#reallyDeleteObjectStore").data("name", dataObjectStoreName);
+    deleteObjectStoreQuestionModal.show();
+  });
+  $("#reallyDeleteObjectStore").on("click", function () {
+    let objectStoreName = $("#reallyDeleteObjectStore").data("name");
+    deleteObjectStore(settings.indexedDB.databaseName, objectStoreName);
+    deleteObjectStoreQuestionModal.hide();
+    location.reload();
   });
 }

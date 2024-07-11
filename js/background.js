@@ -6,6 +6,9 @@ chrome.action.onClicked.addListener((tab) => {
   );
 });
 
+// runtime.connect ports
+let ports = {};
+
 import {
   AutoTokenizer,
   AutoConfig,
@@ -35,6 +38,9 @@ let settings = {
     tableName: "all",
     keyPath: "id",
     version: 1,
+  },
+  openai: {
+    key: "",
   },
 };
 
@@ -80,6 +86,7 @@ function getObjectStoreNames(databaseName) {
     request.onsuccess = (event) => {
       const db = event.target.result;
       const objectStoreNames = Array.from(db.objectStoreNames);
+      db.close();
       resolve(objectStoreNames);
     };
 
@@ -90,18 +97,26 @@ function getObjectStoreNames(databaseName) {
 }
 
 async function downloadModel(port, name) {
+  if (name.startsWith("openai")) {
+    ports["simcheck"].postMessage({
+      type: "loading",
+      status: "openai embedding",
+      task: "done",
+    });
+    return true;
+  }
   let instance = await EmbeddingsPipeline.getInstance(
     (x) => {
       // We also add a progress callback to the pipeline so that we can
       // track model downloading.
       x["type"] = "loading";
-      port.postMessage(x);
+      ports["simcheck"].postMessage(x);
     },
     "feature-extraction",
     name,
     settings.pipeline.options,
   );
-  port.postMessage({
+  ports["simcheck"].postMessage({
     type: "loading",
     status: "download",
     task: "done",
@@ -128,38 +143,35 @@ class EmbeddingsPipeline {
     return this.instance;
   }
 }
-async function createEmbeddings(data, port) {
-  // Create a feature extraction pipeline
-  let extractor = await EmbeddingsPipeline.getInstance(
-    (x) => {
-      // We also add a progress callback to the pipeline so that we can
-      // track model loading.
-      //self.postMessage(x);
-      x["type"] = "loading";
-      port.postMessage(x);
-    },
-    settings.pipeline.task,
-    settings.pipeline.model,
-    settings.pipeline.options,
-  );
 
+async function createEmbeddings3(data) {
   let docsLength = data.docs.length;
   for (let index in data.docs) {
+    let extractor = await EmbeddingsPipeline.getInstance(
+      (x) => {
+        x["type"] = "loading";
+        ports["simcheck"].postMessage(x);
+      },
+      settings.pipeline.task,
+      settings.pipeline.model,
+      settings.pipeline.options,
+    );
+
     let text = data.selectedFields.reduce((accumulator, currentValue) => {
       return `${accumulator}${data.docs[index][currentValue]} `;
     }, "");
     let embedding = await extractor(text, {
       pooling: "cls",
     });
+
     if (!data.docs[index]["embeddings"]) {
       data.docs[index]["embeddings"] = {};
-      data.docs[index]["embeddings"][settings.pipeline.model] = embedding.data;
-    } else {
-      data.docs[index][settings.pipeline.model] = embedding.data;
     }
+    data.docs[index]["embeddings"][settings.pipeline.model] = embedding.data;
+
     let num = parseInt(index);
     let progress = ((num + 1) / docsLength) * 100;
-    port.postMessage({
+    ports["simcheck"].postMessage({
       type: "loading",
       status: "extracting embeddings",
       name: "rows",
@@ -170,7 +182,83 @@ async function createEmbeddings(data, port) {
   const db = await openDatabase();
   await saveData(db, data.docs);
 
-  port.postMessage({
+  ports["simcheck"].postMessage({
+    type: "embeddings-stored",
+    status: "embeddings stored",
+    task: "done",
+  });
+}
+
+async function getEmbeddingsBatch(texts) {
+  const response = await fetch("https://api.openai.com/v1/embeddings", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${settings.openai.key}`,
+    },
+    body: JSON.stringify({
+      model: settings.pipeline.model.replace("openai/", ""),
+      input: texts,
+    }),
+  });
+
+  if (!response.ok) {
+    ports["simcheck"].postMessage({
+      status: 500,
+      statusText: "error calling the openAI embeddings api",
+      error: response.statusText,
+    });
+    return [];
+    //throw new Error(`Error: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  return data;
+}
+
+async function createOpenAiEmbeddings(data) {
+  const batchSize = 1000;
+  const batches = [];
+
+  let docsLength = data.docs.length;
+  for (let index = 0; index < docsLength; index += batchSize) {
+    const batch = data.docs.slice(index, index + batchSize).map((doc) => {
+      return data.selectedFields.reduce((accumulator, currentValue) => {
+        return `${accumulator}${doc[currentValue]} `;
+      }, "");
+    });
+    batches.push(batch);
+  }
+
+  ports["simcheck"].postMessage({
+    type: "loading",
+    status: "data from openAI api",
+  });
+
+  for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+    const batch = batches[batchIndex];
+    const embeddingsResponse = await getEmbeddingsBatch(batch);
+    for (
+      let embeddingsResponseIndex = 0;
+      embeddingsResponseIndex < embeddingsResponse.data.length;
+      embeddingsResponseIndex++
+    ) {
+      let batchDocIndex =
+        embeddingsResponse.data[embeddingsResponseIndex].index;
+      let docIndex = batchDocIndex + batchIndex * batchSize;
+
+      if (!data.docs[docIndex]["embeddings"]) {
+        data.docs[docIndex]["embeddings"] = {};
+      }
+      data.docs[docIndex]["embeddings"][settings.pipeline.model] =
+        embeddingsResponse.data[embeddingsResponseIndex].embedding;
+    }
+  }
+
+  const db = await openDatabase();
+  await saveData(db, data.docs);
+
+  ports["simcheck"].postMessage({
     type: "embeddings-stored",
     status: "embeddings stored",
     task: "done",
@@ -198,7 +286,55 @@ class TopK {
   }
 }
 
-async function searchData(text) {
+async function searchDataOpenAi(text) {
+  const embeddingsResponse = await getEmbeddingsBatch(text);
+
+  const queryVector = embeddingsResponse?.data[0]?.embedding;
+  if (!queryVector) {
+    return;
+  }
+  const queryVectorLength = queryVector.length;
+
+  const db = await openDatabase();
+  const transaction = db.transaction(
+    [settings.indexedDB.tableName],
+    "readonly",
+  );
+  const objectStore = transaction.objectStore(settings.indexedDB.tableName);
+  const request = objectStore.openCursor();
+
+  return new Promise((resolve, reject) => {
+    //let scoreList = [];
+    const topK = new TopK(10);
+
+    request.onsuccess = (event) => {
+      const cursor = event.target.result;
+      if (cursor) {
+        let doc = cursor.value;
+        const vectorValue = doc["embeddings"][settings.pipeline.model];
+
+        if (vectorValue.length == queryVectorLength) {
+          // Only add the vector to the results set if the vector is the same length as query.
+          const similarity = cos_sim(vectorValue, queryVector);
+          doc["score"] = parseFloat(similarity.toPrecision(2));
+          delete doc["embeddings"];
+          //scoreList.push(doc);
+          topK.add(doc);
+        }
+        cursor.continue();
+      } else {
+        resolve(topK.getTopK());
+      }
+    };
+
+    request.onerror = (event) => {
+      console.log(event.target.error);
+      reject(scoreList);
+    };
+  });
+}
+
+async function searchDataHF(text) {
   // Create a feature extraction pipeline
   let extractor = await EmbeddingsPipeline.getInstance(
     (x) => {
@@ -263,6 +399,9 @@ async function getModelData(model) {
 }
 
 async function getNumberOfTokens(text) {
+  if (settings.pipeline.model.startsWith("openai")) {
+    return "?";
+  }
   const tokenizer = await AutoTokenizer.from_pretrained(
     settings.pipeline.model,
   );
@@ -291,7 +430,7 @@ function openDatabase() {
     };
 
     request.onerror = (event) => {
-      port.postMessage({
+      ports["simcheck"].postMessage({
         status: 500,
         statusText: "error opening db",
         error: event.target.error,
@@ -301,21 +440,32 @@ function openDatabase() {
   });
 }
 
-function getAllData(db) {
+async function getAllData(db, tableName) {
   return new Promise((resolve, reject) => {
-    const transaction = db.transaction(
-      [settings.indexedDB.tableName],
-      "readonly",
-    );
-    const store = transaction.objectStore(settings.indexedDB.tableName);
-    const request = store.getAll();
+    const transaction = db.transaction([tableName], "readonly");
+    const objectStore = transaction.objectStore(tableName);
+    //const request = objectStore.getAll();
+    const request = objectStore.openCursor();
 
+    let docs = [];
     request.onsuccess = (event) => {
-      resolve(event.target.result);
+      const cursor = event.target.result;
+
+      function processCursor(cursor) {
+        if (cursor) {
+          docs.push(cursor.value);
+          cursor.continue();
+        } else {
+          //resolve(event.target.result);
+          resolve(docs);
+        }
+      }
+
+      processCursor(cursor);
     };
 
     request.onerror = (event) => {
-      port.postMessage({
+      ports["simcheck"].postMessage({
         status: 500,
         statusText: "error getting data",
         error: event.target.error,
@@ -325,47 +475,137 @@ function getAllData(db) {
   });
 }
 
-async function saveData(db, dataArray) {
+async function saveData(db, docs) {
   return new Promise((resolve, reject) => {
-    const transaction = db.transaction(
-      [settings.indexedDB.tableName],
-      "readwrite",
-    );
-    let store = transaction.objectStore(settings.indexedDB.tableName);
+    const store = db
+      .transaction([settings.indexedDB.tableName], "readwrite")
+      .objectStore(settings.indexedDB.tableName);
 
-    transaction.oncomplete = () => {
-      console.log("save complete");
-      resolve();
-    };
+    ports["simcheck"].postMessage({
+      type: "loading",
+      status: "adding data",
+    });
 
-    transaction.onerror = (event) => {
-      reject(event.target.error);
-    };
+    /*
+    docs.forEach((data) => {
+      store.put(data);
+    });
+    */
 
-    let dataArrayLength = dataArray.length;
-    dataArray.forEach((data, index) => {
-      const request = store.put(data);
-      request.onerror = (event) => {
-        //errorMessage(`Error saving data: ${event.target.error}`);
+    let pending = docs.length;
+    docs.forEach((doc) => {
+      const request = store.put(doc);
+      request.onsuccess = () => {
+        pending -= 1;
+        if (pending === 0) {
+          db.close();
+          resolve();
+        }
       };
-      request.onsuccess = (event) => {
-        /*
-        port.postMessage({
-          status: "storing",
-          name: settings.indexedDB.tableName,
-          progress: ((index + 1) / dataArrayLength) * 100,
-        });
-         */
+
+      request.onerror = (event) => {
+        reject(event.target.error);
       };
     });
+
+    ports["simcheck"].postMessage({
+      type: "loading",
+      status: "save complete",
+    });
+
+    /*
+    store.oncomplete = () => {
+      db.close();
+      resolve();
+    };
+     */
+
+    store.onerror = (event) => {
+      reject(event.target.error);
+    };
   });
+}
+
+function compareArrays(array1, array2, key) {
+  const result = [];
+  let array1Length = array1.length;
+  let pos1 = 1;
+
+  for (let obj1 of array1) {
+    let maxSimilarity = -1;
+    let bestMatch = null;
+
+    let progress = (pos1 / array1Length) * 100;
+    ports["simcheck"].postMessage({
+      type: "loading",
+      status: "comparing embeddings",
+      name: "rows",
+      progress: progress,
+    });
+    pos1++;
+
+    for (let obj2 of array2) {
+      const vec1 = obj1?.["embeddings"]?.[key];
+      const vec2 = obj2?.["embeddings"]?.[key];
+      if (!vec1?.length || !vec2?.length) {
+        continue;
+      }
+      const similarity = cos_sim(vec1, vec2);
+
+      if (similarity > maxSimilarity) {
+        maxSimilarity = similarity;
+        bestMatch = obj2;
+      }
+    }
+
+    let res = obj1;
+    Object.keys(bestMatch).forEach((key) => {
+      if (key == "embeddings") {
+        return;
+      }
+      res[`bestMatch-${key}`] = bestMatch[key];
+    });
+    res["similarity"] = maxSimilarity;
+    result.push(res);
+  }
+
+  result.map((item) => {
+    delete item?.embeddings;
+    return item;
+  });
+
+  return result;
+}
+
+async function compareStores(message) {
+  let resultData = [];
+
+  const db = await openDatabase();
+  const array1 = await getAllData(db, message.store1);
+  const array2 = await getAllData(db, message.store2);
+
+  if (!array1?.length || !array2.length) {
+    console.log("datastore empty");
+    return [];
+  }
+  resultData = compareArrays(array1, array2, settings.pipeline.model);
+  db.close();
+  return resultData;
 }
 
 // listen for messages, process it, and send the result back.
 chrome.runtime.onConnect.addListener(function (port) {
+  ports[port.name] = port;
   if (port.name == "simcheck") {
     port.onMessage.addListener(async function (message) {
       switch (message.action) {
+        case "compare":
+          let tableDate = await compareStores(message);
+          port.postMessage({
+            type: "serp",
+            result: tableDate,
+          });
+          break;
         case "getNumberOfTokens":
           let size = await getNumberOfTokens(message.text);
           port.postMessage({
@@ -394,16 +634,27 @@ chrome.runtime.onConnect.addListener(function (port) {
           let status = downloadModel(port, message.name);
           break;
         case "search":
-          let result = await searchData(message.text);
-          port.postMessage({
-            type: "serp",
-            result: result,
-          });
+          if (settings.pipeline.model.startsWith("openai")) {
+            let result = await searchDataOpenAi(message.text);
+            port.postMessage({
+              type: "serp",
+              result: result,
+            });
+          } else {
+            let result = await searchDataHF(message.text);
+            port.postMessage({
+              type: "serp",
+              result: result,
+            });
+          }
           break;
         case "data-stored":
           settings.indexedDB = message.indexedDB;
           const db = await openDatabase();
-          const tableData = await getAllData(db);
+          const tableData = (
+            await getAllData(db, settings.indexedDB.tableName)
+          ).filter((item) => !item?.embeddings?.[settings.pipeline.model]);
+          db.close();
           if (!tableData.length) {
             port.postMessage({
               status: 404,
@@ -415,14 +666,20 @@ chrome.runtime.onConnect.addListener(function (port) {
             status: 202,
             statusText: "Accepted",
           });
-          await createEmbeddings(
-            {
+          // eg "openai/text-embedding-3-small"
+          if (settings.pipeline.model.startsWith("openai")) {
+            await createOpenAiEmbeddings({
               selectedFields: message.selectedFields,
               key: settings.indexedDB.keyPath,
               docs: tableData,
-            },
-            port,
-          );
+            });
+          } else {
+            await createEmbeddings3({
+              selectedFields: message.selectedFields,
+              key: settings.indexedDB.keyPath,
+              docs: tableData,
+            });
+          }
           break;
         default:
           // not found
