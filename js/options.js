@@ -236,7 +236,11 @@ async function generateObjectStoresTable() {
 
   let html = objectStoreNamesAndSizes
     .map((objectStore, i) => {
-      return `<tr data-name="${objectStore.name}">
+      let classes = "";
+      if (objectStore.name == settings.indexedDB.tableName) {
+        classes = "table-primary";
+      }
+      return `<tr data-name="${objectStore.name}" class="${classes}">
       <td>${objectStore.name}</td>
       <td class="text-end">${objectStore.size.toLocaleString()}</td>
       <td class="text-end"><i class="bi bi-trash text-danger"></i></td>
@@ -368,5 +372,20 @@ async function init() {
     deleteObjectStore(settings.indexedDB.databaseName, objectStoreName);
     deleteObjectStoreQuestionModal.hide();
     location.reload();
+  });
+
+  $.fn.toggleAttribute = function (attr, val1, val2) {
+    return this.each(function () {
+      var $this = $(this);
+      if ($this.attr(attr) === val1) {
+        $this.attr(attr, val2);
+      } else {
+        $this.attr(attr, val1);
+      }
+    });
+  };
+  $("#eye").on("click", function () {
+    $(this).toggleClass(["bi-eye-slash", "bi-eye"]);
+    $("#openaiKey").toggleAttribute("type", "password", "text");
   });
 }

@@ -15,14 +15,69 @@
             href="/bootstrap-icons-1.8.1/bootstrap-icons.css"
         />
         <link rel="stylesheet" href="/css/bootstrap-table.min.v1.22.4.css" />
+        <link rel="stylesheet" href="/css/select2.min.v4.0.13.css" />
     </head>
 
     <body style="background-color: #ebeff7">
-        <div class="container my-4"><div class="container my-4">
+        <div class="container-fluid my-4">
+            <div class="card mb-1">
+                <div class="card-body">
+                    <div class="progress px-0 shadow-sm">
+                        <div
+                            id="progress"
+                            class="progress-bar progress-bar-striped progress-bar-animated"
+                            role="progressbar"
+                            style="width: 0%"
+                        >
+                            -
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header bg-primary-subtle">
+                    cluster settings
+                </div>
+                <div class="card-body">
+                    <div class="row pb-2">
+                        <div class="mb-2">
+                            <div class="input-group">
+                                <select
+                                    id="objectStores"
+                                    class="form-control"
+                                    multiple="multiple"
+                                    placeholder="dataset to cluster"
+                                ></select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="d-grid gap-2">
+                        <button
+                            type="button"
+                            class="btn btn-primary"
+                            id="clusterEmbeddings"
+                        >
+                            start clustering
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row mx-1 bg-body">
+                <table id="dataTable"></table>
+            </div>
         </div>
 
         <script src="/js/jquery.min.v3.7.1.js"></script>
         <script src="/js/bootstrap.bundle.v5.3.min.js"></script>
+
+        <script src="/js/bootstrap-table.min.v1.22.4.js"></script>
+        <script src="/js/tableExport.min.v1.27.0.js"></script>
+        <script src="/js/bootstrap-table-export.min.v1.22.4.js"></script>
+
+        <script src="/js/Sortable.min.v1.15.2.js"></script>
+        <script src="/js/select2.min.v4.0.13.js"></script>
 
         <script type="module" src="/js/cluster.js"></script>
     </body>

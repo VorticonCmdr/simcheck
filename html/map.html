@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1, user-scalable=0"
+        />
+
+        <title>map | simcheck</title>
+
+        <link rel="stylesheet" href="/css/bootstrap.v5.3.min.css" />
+        <link
+            rel="stylesheet"
+            href="/bootstrap-icons-1.8.1/bootstrap-icons.css"
+        />
+        <link rel="stylesheet" href="/css/bootstrap-table.min.v1.22.4.css" />
+    </head>
+
+    <body style="background-color: #ebeff7; overflow: hidden">
+        <div class="container-fluid">
+            <button
+                id="menuBtn"
+                style="z-index: 3"
+                class="btn btn-link position-absolute z-3 mx-2 my-2 fs-3"
+                type="button"
+                data-bs-toggle="offcanvas"
+                data-bs-target="#offcanvasMenu"
+            >
+                <i class="bi bi-sliders"></i>
+            </button>
+            <div
+                id="board"
+                class="position-absolute w-100 h-100"
+                style="z-index: 0"
+            >
+                <svg id="map"></svg>
+            </div>
+        </div>
+
+        <div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasMenu">
+            <div class="offcanvas-header">
+                <h5 id="offcanvasTopLabel">menu</h5>
+                <button
+                    type="button"
+                    class="btn-close text-reset"
+                    data-bs-dismiss="offcanvas"
+                    aria-label="Close"
+                ></button>
+            </div>
+            <div class="offcanvas-body">
+                <div class="d-grid mb-2">
+                    <div class="form-floating">
+                        <select
+                            class="form-select"
+                            id="objectStoreSelect"
+                        ></select>
+                        <label for="objectStoreSelect">select dataset</label>
+                    </div>
+                    <button
+                        id="regenerateMap"
+                        type="button"
+                        class="btn btn-info"
+                        data-bs-dismiss="offcanvas"
+                    >
+                        (re)generate map
+                    </button>
+                </div>
+
+                <div class="d-grid mb-2">
+                    <button
+                        id="resetZoom"
+                        type="button"
+                        class="btn btn-primary"
+                        data-bs-dismiss="offcanvas"
+                    >
+                        reset zoom
+                    </button>
+                </div>
+                <div class="input-group mb-2">
+                    <input
+                        type="text"
+                        class="form-control w-50"
+                        placeholder="regex"
+                        id="attrRegex"
+                    />
+                    <input
+                        type="color"
+                        class="form-control form-control-color"
+                        id="urlRegexColor"
+                        value="#E20074"
+                        title="Choose your color"
+                    />
+                    <select id="colorFields" class="form-select"></select>
+                    <button
+                        class="btn btn-outline-secondary"
+                        type="button"
+                        id="urlRegexBtn"
+                    >
+                        add
+                    </button>
+                </div>
+                <div id="markedPoints" class="d-grid list-group mb-2"></div>
+                <div class="d-grid mb-2">
+                    <button
+                        id="autoColorClusters"
+                        type="button"
+                        class="btn btn-primary"
+                        data-bs-dismiss="offcanvas"
+                    >
+                        auto colors clusters
+                    </button>
+                </div>
+                <div class="input-group mb-2">
+                    <div class="form-floating">
+                        <select id="clusterSelect" class="form-select"></select>
+                        <label for="clusterSelect">select cluster</label>
+                    </div>
+                </div>
+                <div class="input-group mb-2">
+                    <a
+                        id="config"
+                        class="link-underline-light"
+                        target="_top"
+                        href="/html/options.html"
+                        >more options</a
+                    >
+                </div>
+            </div>
+        </div>
+
+        <div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasRight">
+            <div class="offcanvas-header">
+                <h5 class="offcanvas-title">
+                    cluster: <span id="offcanvasRightLabel"></span>
+                </h5>
+
+                <button
+                    id="closeRelated"
+                    type="button"
+                    class="btn-close"
+                    data-bs-dismiss="offcanvas"
+                ></button>
+            </div>
+            <div class="offcanvas-body">
+                <div class="d-grid mb-2">
+                    <button
+                        id="tableRelated"
+                        type="button"
+                        class="btn btn-primary"
+                        data-bs-toggle="modal"
+                        data-bs-target="#tableModal"
+                    >
+                        <i class="bi bi-table me-2"></i>show all data
+                    </button>
+                </div>
+                <div class="accordion" id="accordionRelated"></div>
+            </div>
+        </div>
+
+        <div
+            class="modal fade"
+            id="tableModal"
+            data-bs-backdrop="static"
+            data-bs-keyboard="false"
+            tabindex="-1"
+        >
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h1 class="modal-title fs-5" id="staticBackdropLabel">
+                            Modal title
+                        </h1>
+                        <button
+                            type="button"
+                            class="btn-close"
+                            data-bs-dismiss="modal"
+                            aria-label="Close"
+                        ></button>
+                    </div>
+                    <div class="modal-body">...</div>
+                    <div class="modal-footer">
+                        <button
+                            type="button"
+                            class="btn btn-secondary"
+                            data-bs-dismiss="modal"
+                        >
+                            Close
+                        </button>
+                        <button type="button" class="btn btn-primary">
+                            Understood
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script src="/js/jquery.min.v3.7.1.js"></script>
+        <script src="/js/bootstrap.bundle.v5.3.min.js"></script>
+
+        <script src="/js/handlebars.runtime.min.v4.7.8.js"></script>
+        <script src="/templates/accordionItem.precompiled.js"></script>
+
+        <script src="/js/dbscan.js"></script>
+
+        <script type="module" src="/js/map.js"></script>
+    </body>
+</html>

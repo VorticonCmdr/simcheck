@@ -5,6 +5,12 @@ let csvData = [];
 let filename;
 let db;
 
+let config = {
+  fields: {
+    disabled: new Set(["embeddings", "clusterNumber", "order", "coordinates"]),
+  },
+};
+
 let settings = {
   pipeline: {
     task: "feature-extraction",
@@ -29,6 +35,7 @@ async function getSettings() {
     if (result.settings !== undefined) {
       settings = result.settings;
     }
+    $("#generateEmbeddings").text(`generate ${settings.pipeline.model}`);
     init();
   });
 }
@@ -204,8 +211,8 @@ function parseCsvData(textData) {
   generateTable(csvData);
 
   let fieldsHtml = result?.meta?.fields.reduce((accumulator, currentValue) => {
-    return `${accumulator}\n<option value="${currentValue}">${currentValue}</option>`;
-  }, `<option class="fw-bold" selected disabled>select and add fields to combine and embed</option>`);
+    return `${accumulator}\n<option data-id="${currentValue}" value="${currentValue}">${currentValue}</option>`;
+  }, ``);
   $("#embeddingsFields").html(fieldsHtml);
 
   let idFieldsHtml = result?.meta?.fields.reduce(
@@ -227,15 +234,17 @@ async function generateTable(dataArray) {
   }
 
   let columns = [];
-  Object.keys(dataArray[0]).forEach((key, i) => {
-    columns.push({
-      field: key,
-      title: key,
-      sortable: true,
-      searchable: false,
-      align: isNumber(dataArray[0][key]) ? "right" : "left",
+  Object.keys(dataArray[0])
+    .filter((key) => !config.fields.disabled.has(key))
+    .forEach((key, i) => {
+      columns.push({
+        field: key,
+        title: key,
+        sortable: true,
+        searchable: false,
+        align: isNumber(dataArray[0][key]) ? "right" : "left",
+      });
     });
-  });
 
   $("#dataTable")
     .bootstrapTable("destroy")
@@ -341,6 +350,10 @@ async function getAllData(db, tableName) {
   return new Promise((resolve, reject) => {
     const transaction = db.transaction([tableName], "readonly");
     const objectStore = transaction.objectStore(tableName);
+    settings.indexedDB.keyPath = objectStore.keyPath;
+    $("#idFields").html(
+      `<option selected disabled value="${settings.indexedDB.keyPath}">${settings.indexedDB.keyPath}</option>`,
+    );
     //const request = objectStore.getAll();
     const request = objectStore.openCursor();
 
@@ -353,6 +366,15 @@ async function getAllData(db, tableName) {
           docs.push(cursor.value);
           cursor.continue();
         } else {
+          if (docs?.length) {
+            row1 = docs[0];
+            let fieldsHtml = Object.keys(row1)
+              .filter((name) => name != "embeddings")
+              .reduce((accumulator, currentValue) => {
+                return `${accumulator}\n<option data-id="${currentValue}" value="${currentValue}">${currentValue}</option>`;
+              }, ``);
+            $("#embeddingsFields").html(fieldsHtml);
+          }
           //resolve(event.target.result);
           resolve(docs);
         }
@@ -447,30 +469,6 @@ function processSelectedFields(evt) {
 async function init() {
   await handleIndexedDB();
 
-  sortable = new Sortable(document.getElementById("selectedFields"), {
-    animation: 150,
-    group: "sortable",
-    onSort: processSelectedFields,
-  });
-  let trashHeap = new Sortable(document.getElementById("trashFields"), {
-    animation: 150,
-    group: "sortable",
-    onAdd: function (/**Event*/ evt) {
-      $(evt.item).remove();
-    },
-  });
-  $("#addEmbeddingField").on("click", function () {
-    let selectedField = $("#embeddingsFields").val();
-    if (!selectedField) {
-      return;
-    }
-
-    $("#selectedFields").append(
-      `<li class="list-group-item d-flex justify-content-between align-items-center" data-id="${selectedField}">${selectedField}<i class="bi bi-grip-vertical text-end"></i></li>`,
-    );
-    processSelectedFields(null);
-  });
-
   $(document).on("change", "#idFields", function () {
     let value = $(this).val();
     if (!value) {
@@ -485,13 +483,17 @@ async function init() {
       return;
     }
     let db = await openDatabase();
-    let result = await getAllData(db, name);
-    db.close();
-    result = result.map((item) => {
-      delete item?.embeddings;
-      return item;
-    });
-    generateTable(result);
+    try {
+      let result = await getAllData(db, name);
+      db.close();
+      result = result.map((item) => {
+        delete item?.embeddings;
+        return item;
+      });
+      generateTable(result);
+    } catch (error) {
+      db.close();
+    }
   });
 
   $("#generateEmbeddings").on("click", async function () {
@@ -556,4 +558,29 @@ async function init() {
     settings.indexedDB.tableName = tableName;
     await setSettings();
   });
+
+  $("#embeddingsFields")
+    .select2({
+      tags: true,
+      allowClear: true,
+      placeholder: "select text fields for embedding",
+      templateSelection: function (data, container) {
+        $(data.element).attr("data-id", data.id);
+        return data.text;
+      },
+    })
+    .on("change", function (evt) {
+      processSelectedFields(evt);
+    });
+  let sortableEl = $(".select2-selection__rendered")[0];
+  if (sortableEl) {
+    sortable = new Sortable(sortableEl, {
+      filter: ".select2-search",
+      draggable: ".select2-selection__choice",
+      dataIdAttr: "title",
+      onSort: function (evt) {
+        processSelectedFields(evt);
+      },
+    });
+  }
 }

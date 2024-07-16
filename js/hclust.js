@@ -129,9 +129,3 @@ export const clusterData = ({
     clustersGivenK: clustersGivenK,
   };
 };
-
-window.hclust = {
-  euclideanDistance: euclideanDistance,
-  averageDistance: averageDistance,
-  clusterData: clusterData,
-};

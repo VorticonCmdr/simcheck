@@ -1,0 +1,274 @@
+/**
+ * DBSCAN - Density based clustering
+ *
+ * @author Lukasz Krawczyk <contact@lukaszkrawczyk.eu>
+ * @copyright MIT
+ */
+
+/**
+ * DBSCAN class constructor
+ * @constructor
+ *
+ * @param {Array} dataset
+ * @param {number} epsilon
+ * @param {number} minPts
+ * @param {function} distanceFunction
+ * @returns {DBSCAN}
+ */
+function DBSCAN(dataset, epsilon, minPts, distanceFunction) {
+  /** @type {Array} */
+  this.dataset = [];
+  /** @type {number} */
+  this.epsilon = 0.3;
+  /** @type {number} */
+  this.minPts = 3;
+  /** @type {function} */
+  this.distance = this._euclideanDistance;
+  /** @type {Array} */
+  this.clusters = [];
+  /** @type {Array} */
+  this.noise = [];
+
+  // temporary variables used during computation
+
+  /** @type {Array} */
+  this._visited = [];
+  /** @type {Array} */
+  this._assigned = [];
+  /** @type {number} */
+  this._datasetLength = 0;
+
+  this._init(dataset, epsilon, minPts, distanceFunction);
+}
+
+/******************************************************************************/
+// public functions
+
+/**
+ * Start clustering
+ *
+ * @param {Array} dataset
+ * @param {number} epsilon
+ * @param {number} minPts
+ * @param {function} distanceFunction
+ * @returns {undefined}
+ * @access public
+ */
+DBSCAN.prototype.run = function (dataset, epsilon, minPts, distanceFunction) {
+  this._init(dataset, epsilon, minPts, distanceFunction);
+
+  for (var pointId = 0; pointId < this._datasetLength; pointId++) {
+    // if point is not visited, check if it forms a cluster
+    if (this._visited[pointId] !== 1) {
+      this._visited[pointId] = 1;
+
+      // if closest neighborhood is too small to form a cluster, mark as noise
+      var neighbors = this._regionQuery(pointId);
+
+      if (neighbors.length < this.minPts) {
+        this.noise.push(pointId);
+      } else {
+        // create new cluster and add point
+        var clusterId = this.clusters.length;
+        this.clusters.push([]);
+        this._addToCluster(pointId, clusterId);
+
+        this._expandCluster(clusterId, neighbors);
+      }
+    }
+  }
+
+  return this.clusters;
+};
+
+/******************************************************************************/
+// protected functions
+
+/**
+ * Set object properties
+ *
+ * @param {Array} dataset
+ * @param {number} epsilon
+ * @param {number} minPts
+ * @param {function} distance
+ * @returns {undefined}
+ * @access protected
+ */
+DBSCAN.prototype._init = function (dataset, epsilon, minPts, distance) {
+  if (dataset) {
+    if (!(dataset instanceof Array)) {
+      throw Error(
+        "Dataset must be of type array, " + typeof dataset + " given",
+      );
+    }
+
+    this.dataset = dataset;
+    this.clusters = [];
+    this.noise = [];
+
+    this._datasetLength = dataset.length;
+    this._visited = new Array(this._datasetLength);
+    this._assigned = new Array(this._datasetLength);
+  }
+
+  if (epsilon) {
+    this.epsilon = epsilon;
+  }
+
+  if (minPts) {
+    this.minPts = minPts;
+  }
+
+  if (distance) {
+    this.distance = distance;
+  }
+};
+
+/**
+ * Expand cluster to closest points of given neighborhood
+ *
+ * @param {number} clusterId
+ * @param {Array} neighbors
+ * @returns {undefined}
+ * @access protected
+ */
+DBSCAN.prototype._expandCluster = function (clusterId, neighbors) {
+  /**
+   * It's very important to calculate length of neighbors array each time,
+   * as the number of elements changes over time
+   */
+  for (var i = 0, len = neighbors.length; i < len; i++) {
+    var pointId2 = neighbors[i];
+
+    if (this._visited[pointId2] !== 1) {
+      this._visited[pointId2] = 1;
+      var neighbors2 = this._regionQuery(pointId2);
+
+      if (neighbors2.length >= this.minPts) {
+        neighbors = this._mergeArrays(neighbors, neighbors2);
+      }
+    }
+
+    // add to cluster
+    //if (this._assigned[pointId2] !== 1) {
+    if (this._assigned[pointId2] !== clusterId) {
+      this._addToCluster(pointId2, clusterId);
+    }
+  }
+};
+
+/**
+ * Add new point to cluster
+ *
+ * @param {number} pointId
+ * @param {number} clusterId
+ */
+DBSCAN.prototype._addToCluster = function (pointId, clusterId) {
+  this.clusters[clusterId].push(pointId);
+  //this._assigned[pointId] = 1;
+  this._assigned[pointId] = clusterId;
+};
+
+/**
+ * Find all neighbors around given point
+ *
+ * @param {number} pointId,
+ * @param {number} epsilon
+ * @returns {Array}
+ * @access protected
+ */
+DBSCAN.prototype._regionQuery = function (pointId) {
+  var neighbors = [];
+
+  for (var id = 0; id < this._datasetLength; id++) {
+    var dist = this.distance(this.dataset[pointId], this.dataset[id]);
+    if (dist < this.epsilon) {
+      neighbors.push(id);
+    }
+  }
+
+  return neighbors;
+};
+
+/******************************************************************************/
+// helpers
+
+/**
+ * @param {Array} a
+ * @param {Array} b
+ * @returns {Array}
+ * @access protected
+ */
+DBSCAN.prototype._mergeArrays = function (a, b) {
+  var len = b.length;
+
+  for (var i = 0; i < len; i++) {
+    var P = b[i];
+    if (a.indexOf(P) < 0) {
+      a.push(P);
+    }
+  }
+
+  return a;
+};
+
+/**
+ * Calculate euclidean distance in multidimensional space
+ *
+ * @param {Array} p
+ * @param {Array} q
+ * @returns {number}
+ * @access protected
+ */
+DBSCAN.prototype._euclideanDistance = function (point1, point2) {
+  return Math.sqrt(
+    Math.pow(point2.x - point1.x, 2) + Math.pow(point2.y - point1.y, 2),
+  );
+};
+
+DBSCAN.prototype._getClusterCenters = function () {
+  const num_clusters = this.clusters.length;
+  const clusters_centers = [];
+
+  for (let i = 0; i < num_clusters; i++) {
+    clusters_centers[i] = { x: 0, y: 0 };
+
+    for (let j = 0, len = this.clusters[i].length; j < len; j++) {
+      clusters_centers[i].x += this.dataset[this.clusters[i][j]].x;
+      clusters_centers[i].y += this.dataset[this.clusters[i][j]].y;
+    }
+
+    clusters_centers[i].x /= this.clusters[i].length;
+    clusters_centers[i].y /= this.clusters[i].length;
+    clusters_centers[i].dimension = this.clusters[i].length;
+    clusters_centers[i].parts = this.clusters[i];
+  }
+
+  return clusters_centers;
+};
+
+/*
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = DBSCAN;
+}
+ */
+
+(function (root, factory) {
+  if (typeof define === "function" && define.amd) {
+    // AMD. Register as an anonymous module.
+    define([], factory);
+  } else if (typeof module === "object" && module.exports) {
+    // Node. Does not work with strict CommonJS, but
+    // only CommonJS-like environments that support module.exports,
+    // like Node.
+    module.exports = factory();
+  } else {
+    // Browser globals (root is window)
+    root.jDBSCAN = factory();
+  }
+})(typeof self !== "undefined" ? self : this, function () {
+  // Just return a value to define the module export.
+  // This example returns an object, but the module
+  // can return a function as the exported value.
+  return DBSCAN;
+});

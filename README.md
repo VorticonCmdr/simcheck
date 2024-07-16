@@ -21,5 +21,23 @@ for nice tables
 ### [jQuery](https://github.com/jquery/jquery)
 for ease of Javascript use
 
+### [handlebarsJS](https://handlebarsjs.com/)
+for easy templating
+
 ### [sortable](https://sortablejs.github.io/Sortable/)
 usability
+
+### [select2](https://github.com/select2/select2)
+better selects
+
+### [hlcust](https://github.com/greenelab/hclust)
+Agglomerative hierarchical clustering of high-dimensional data
+
+### [umap-js](https://github.com/PAIR-code/umap-js)
+vector projections
+
+### [density-clustering](https://github.com/uhho/density-clustering)
+fast clustering of 2d projected data
+
+### [d3](https://github.com/d3/d3)
+bring data to life with SVG

@@ -1,0 +1,15 @@
+{{#each this}}
+<div class="accordion-item">
+    <h2 class="accordion-header" id="heading{{@index}}">
+        <button class="accordion-button collapsed {{#if this.clicked}}bg-success-subtle{{/if}}" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{@index}}">
+        {{this.title}}
+        </button>
+    </h2>
+    <div id="collapse{{@index}}" class="accordion-collapse collapse {{#if this.clicked}}show{{/if}}" data-bs-parent="#accordionRelated">
+        <div class="accordion-body">
+            <h5 class="card-title"><a href="{{{this.id}}}/" target="_blank">{{this.title}}</a></h5>
+            <p class="small card-subtitle mb-2 text-muted">{{this.description}}</p>
+        </div>
+    </div>
+</div>
+{{/each}}

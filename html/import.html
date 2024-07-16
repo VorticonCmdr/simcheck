@@ -15,6 +15,7 @@
             href="/bootstrap-icons-1.8.1/bootstrap-icons.css"
         />
         <link rel="stylesheet" href="/css/bootstrap-table.min.v1.22.4.css" />
+        <link rel="stylesheet" href="/css/select2.min.v4.0.13.css" />
     </head>
 
     <body style="background-color: #ebeff7">
@@ -63,9 +64,9 @@
                         ></file-drop>
                     </div>
 
-                    <div class="row pb-3">
+                    <div class="row pb-2">
                         <span class="fw-5">object storage settings</span>
-                        <div class="pb-2">
+                        <div class="">
                             <div class="input-group">
                                 <label
                                     for="saveTableInput"
@@ -75,7 +76,7 @@
                                 <input
                                     type="text"
                                     class="form-control"
-                                    placeholder="e.g. all"
+                                    placeholder="select existing or create new"
                                     id="saveTableInput"
                                     list="saveTableList"
                                     autocomplete="off"
@@ -88,7 +89,7 @@
                         <div class="pb-2">
                             <div class="input-group">
                                 <label for="idFields" class="input-group-text"
-                                    >id field</label
+                                    >object store id</label
                                 >
                                 <select
                                     id="idFields"
@@ -96,37 +97,12 @@
                                 ></select>
                             </div>
                         </div>
-                        <div class="">
-                            <div class="input-group">
-                                <label
-                                    for="embeddingsFields"
-                                    class="input-group-text"
-                                    >embedding text fields</label
-                                >
-                                <select
-                                    id="embeddingsFields"
-                                    class="form-select"
-                                ></select>
-                                <button
-                                    type="button"
-                                    class="btn btn-outline-primary"
-                                    id="addEmbeddingField"
-                                >
-                                    add
-                                </button>
-                            </div>
-                            <ul id="selectedFields" class="list-group"></ul>
-                            <ul
-                                id="trashFields"
-                                class="list-group bg-danger-subtle d-flex justify-content-center align-items-center"
-                            >
-                                <i class="bi bi-trash fs-4"></i>
-                            </ul>
-                        </div>
-                        <div class="pb-2">
+
+                        <div class="mt-2">
                             <div class="form-floating">
                                 <textarea
                                     disabled
+                                    rows="4"
                                     class="form-control fw-light h-auto d-inline-block"
                                     placeholder="example text to get embedded"
                                     id="exampleText"
@@ -134,6 +110,16 @@
                                 <label for="exampleText" id="numberOfTokens"
                                     >example text to get embedded</label
                                 >
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <div class="input-group">
+                                <select
+                                    id="embeddingsFields"
+                                    class="form-control"
+                                    multiple="multiple"
+                                    placeholder="embedding text fields"
+                                ></select>
                             </div>
                         </div>
                     </div>
@@ -199,6 +185,7 @@
         <script src="/js/bootstrap-table-export.min.v1.22.4.js"></script>
 
         <script src="/js/Sortable.min.v1.15.2.js"></script>
+        <script src="/js/select2.min.v4.0.13.js"></script>
         <script src="/js/import.js"></script>
     </body>
 </html>

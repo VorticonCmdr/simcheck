@@ -16,7 +16,8 @@ import {
   layer_norm,
   env,
   cos_sim,
-} from "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2";
+  //} from "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2";
+} from "/js/transformers.min.js";
 
 env.allowRemoteModels = true;
 env.allowLocalModels = false;
@@ -406,6 +407,7 @@ async function getNumberOfTokens(text) {
     settings.pipeline.model,
   );
   const { input_ids } = await tokenizer(text);
+
   return input_ids.size;
 }
 
