@@ -564,6 +564,11 @@ chrome.runtime.onConnect.addListener(function (port) {
   if (port.name == "simcheck") {
     port.onMessage.addListener(async function (message) {
       switch (message.action) {
+        case "ping":
+          port.postMessage({
+            type: "pong",
+          });
+          break;
         case "compare":
           let tableDate = await compareStores(message);
           port.postMessage({

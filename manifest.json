@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "simcheck",
-  "description": "a chrome extension based on transformers.js to generate, compare and visualize vector embeddings",
+  "description": "a chrome extension to generate, compare and visualize vector embeddings",
   "version": "0.0.1",
   "permissions": [
     "activeTab",

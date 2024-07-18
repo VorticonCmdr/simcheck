@@ -7,6 +7,7 @@ class PortConnector {
     // Use the custom message handler if provided, otherwise use the default one
     this.messageHandler = customMessageHandler || this.defaultMessageHandler;
 
+    this.keepAliveInterval = null;
     this.connect();
   }
 
@@ -20,6 +21,13 @@ class PortConnector {
     this.port.onDisconnect.addListener(this.handleDisconnect.bind(this));
 
     this.isConnected = true;
+
+    // Bind the keepAlive method to the current instance
+    this.keepAliveInterval = setInterval(this.keepAlive.bind(this), 5000);
+  }
+
+  keepAlive() {
+    this.postMessage({ action: "ping" });
   }
 
   disconnect() {

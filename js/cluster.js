@@ -40,7 +40,7 @@ let settings;
 
 let config = {
   fields: {
-    disabled: new Set(["embeddings", "clusterNumber", "order", "coordinates"]),
+    disabled: new Set(["embeddings", "order", "coordinates"]),
   },
   umap: {
     nComponents: 2,

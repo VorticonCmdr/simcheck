@@ -26,7 +26,6 @@ let board = {
     right: 0,
     bottom: 0,
   },
-  labelKey: "h1",
 };
 
 let config = {
@@ -44,6 +43,10 @@ let config = {
     available: new Set(),
   },
   regexes: [],
+  labels: {
+    title: "H1-1",
+    description: "Meta Description 1",
+  },
 };
 
 function openDatabase(nextVersion) {
@@ -108,7 +111,7 @@ async function loadMapData(db, tableName) {
   });
 }
 
-function colorFields() {
+function setupSelects() {
   let html = [...config.fields.available]
     .filter((name) => {
       return !config.fields.disabled.has(name);
@@ -117,12 +120,16 @@ function colorFields() {
       return `${accumulator}\n<option value="${currentValue}">${currentValue}</option>`;
     }, ``);
   $("#colorFields").html(html);
+  $("#titleSelect").html(html);
+  $("#titleSelect").val(config.labels.title);
+  $("#descriptionSelect").html(html);
+  $("#descriptionSelect").val(config.labels.description);
 }
 
 async function loadData(objectStoreName) {
   let db = await openDatabase();
   let loaded = await loadMapData(db, settings.indexedDB.tableName);
-  colorFields();
+  setupSelects();
 
   setSettings();
 
@@ -206,9 +213,7 @@ function colorCircles(pattern) {
 
 function colorByRegexes() {
   $("#coloring").empty();
-  console.log("color");
   config.regexes.forEach((pattern) => {
-    console.log(pattern);
     colorCircles(pattern);
   });
   let html = Handlebars.templates.coloring(config.regexes);
@@ -284,11 +289,8 @@ function showCluster(clickedCircle) {
 
   $("#accordionRelated").empty();
 
-  let items = board["circles"]
+  let circles = board["circles"]
     .filter(function (circle) {
-      circle.title = circle.h1;
-      circle.id = circle[settings.indexedDB.keyPath];
-
       if (circle.cluster == clickedCircle.cluster) {
         if (circle === clickedCircle) {
           circle.clicked = true;
@@ -298,6 +300,16 @@ function showCluster(clickedCircle) {
       return false;
     })
     .data();
+
+  let items = circles.map((circle) => {
+    return {
+      title: circle[config.labels.title],
+      description: circle[config.labels.description],
+      id: circle[settings.indexedDB.keyPath],
+      clicked: circle.clicked,
+      color: circle.color,
+    };
+  });
 
   let html = Handlebars.templates.accordionItem(items);
   $("#accordionRelated").html(html);
@@ -382,7 +394,7 @@ async function generateMap() {
     .attr("x", (d) => board.xScale(d.coordinates[0]) + 3)
     .attr("y", (d) => board.yScale(d.coordinates[1]))
     .attr("opacity", 0)
-    .text((d) => d[board.labelKey]);
+    .text((d) => d[config.labels.title]);
 
   board["brush"] = d3
     .brush()
@@ -441,7 +453,7 @@ async function generateMap() {
     .attr("fill", "#a9a9a9")
     .attr("opacity", config.opacity.default)
     .attr("data-bs-toggle", "tooltip")
-    .attr("data-bs-title", (d) => d.h1)
+    .attr("data-bs-title", (d) => d[config.labels.title])
     .on("click", circleClick);
 
   let tooltipTriggerList = document.querySelectorAll(
@@ -467,6 +479,7 @@ async function generateMap() {
   });
 
   let bboxes = [];
+  $clusterSelect.append(`<option disabled selected>to center</option>`);
   board.setCentroids.forEach((item, i) => {
     let cid = `#c${sanitizeForQuerySelector(item[settings.indexedDB.keyPath])}`;
     let tid = `#t${sanitizeForQuerySelector(item[settings.indexedDB.keyPath])}`;
@@ -484,7 +497,7 @@ async function generateMap() {
     }
 
     $clusterSelect.append(
-      `<option value="${item?.[settings.indexedDB.keyPath]}">${item.h1}</option>`,
+      `<option value="${item?.[settings.indexedDB.keyPath]}">${item[config.labels.title]}</option>`,
     );
   });
 }
@@ -607,6 +620,15 @@ async function init() {
       (_, index) => index !== indexToRemove,
     );
     $("#coloring li").eq(indexToRemove).remove();
+  });
+
+  $(document).on("change", "#titleSelect", function () {
+    config.labels.title = $("#titleSelect option:selected").val();
+    board.labels.text((d) => d[config.labels.title]);
+  });
+
+  $(document).on("change", "#descriptionSelect", function () {
+    config.labels.description = $("#descriptionSelect option:selected").val();
   });
 }
 init();

@@ -33,6 +33,9 @@ const simcheckPort = new PortConnector({
 
 async function messageHandler(message) {
   switch (message.type) {
+    case "pong":
+      console.log("pong");
+      break;
     case "loading":
       setProgressbar(message);
       break;

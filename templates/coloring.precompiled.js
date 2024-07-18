@@ -14,8 +14,8 @@ templates['coloring'] = template({"1":function(container,depth0,helpers,partials
     + alias2(alias1((depth0 != null ? lookupProperty(depth0,"attr") : depth0), depth0))
     + "\" disabled=\"\">\n        <input type=\"color\" class=\"form-control-color\" value=\""
     + alias2(alias1((depth0 != null ? lookupProperty(depth0,"color") : depth0), depth0))
-    + "\" disabled=\"\">\n        <button class=\"btn btn-outline-secondary removeColor\" type=\"button\" data-index=\""
-    + alias2(((helper = (helper = lookupProperty(helpers,"index") || (data && lookupProperty(data,"index"))) != null ? helper : container.hooks.helperMissing),(typeof helper === "function" ? helper.call(depth0 != null ? depth0 : (container.nullContext || {}),{"name":"index","hash":{},"data":data,"loc":{"start":{"line":7,"column":88},"end":{"line":7,"column":98}}}) : helper)))
+    + "\" disabled=\"\">\n        <button class=\"btn btn-outline-danger removeColor\" type=\"button\" data-index=\""
+    + alias2(((helper = (helper = lookupProperty(helpers,"index") || (data && lookupProperty(data,"index"))) != null ? helper : container.hooks.helperMissing),(typeof helper === "function" ? helper.call(depth0 != null ? depth0 : (container.nullContext || {}),{"name":"index","hash":{},"data":data,"loc":{"start":{"line":7,"column":85},"end":{"line":7,"column":95}}}) : helper)))
     + "\" data-regex=\""
     + alias2(alias1((depth0 != null ? lookupProperty(depth0,"regex") : depth0), depth0))
     + "\" data-attr=\""
