@@ -1,5 +1,5 @@
 # simcheck
-a chrome extension which uses transformers.js to generate and compare vector embeddings
+a chrome extension based on transformers.js to generate, compare and visualize vector embeddings
 
 ## used libraries
 
@@ -31,7 +31,7 @@ usability
 better selects
 
 ### [hlcust](https://github.com/greenelab/hclust)
-Agglomerative hierarchical clustering of high-dimensional data
+agglomerative hierarchical clustering of high-dimensional data
 
 ### [umap-js](https://github.com/PAIR-code/umap-js)
 vector projections

@@ -6,9 +6,6 @@ chrome.action.onClicked.addListener((tab) => {
   );
 });
 
-// runtime.connect ports
-let ports = {};
-
 import {
   AutoTokenizer,
   AutoConfig,
@@ -16,7 +13,6 @@ import {
   layer_norm,
   env,
   cos_sim,
-  //} from "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2";
 } from "/js/transformers.min.js";
 
 env.allowRemoteModels = true;
@@ -26,48 +22,8 @@ env.allowLocalModels = false;
 // See https://github.com/microsoft/onnxruntime/issues/14445 for more information.
 env.backends.onnx.wasm.numThreads = 1;
 
-let settings = {
-  pipeline: {
-    task: "feature-extraction",
-    model: "nomic-ai/nomic-embed-text-v1.5",
-    options: {
-      quantized: false,
-    },
-  },
-  indexedDB: {
-    databaseName: "simcheck",
-    tableName: "all",
-    keyPath: "id",
-    version: 1,
-  },
-  openai: {
-    key: "",
-  },
-};
-
-let dataset = {
-  key: "",
-  docs: {},
-  selectedFields: [],
-};
-async function getSettings() {
-  chrome.storage.local.get("settings", async (result) => {
-    if (result.settings !== undefined) {
-      settings = result.settings;
-    } else {
-      setSettings();
-    }
-  });
-}
-getSettings();
-
-async function setSettings() {
-  chrome.storage.local.set({ ["settings"]: settings }, async () => {
-    if (chrome.runtime.lastError) {
-      console.error("Error storing data:", chrome.runtime.lastError);
-    }
-  });
-}
+import { getSettings, setSettings } from "/js/settings.js";
+let settings;
 
 function handleStorageChange(changes, namespace) {
   for (let [key, { oldValue, newValue }] of Object.entries(changes)) {
@@ -79,6 +35,11 @@ function handleStorageChange(changes, namespace) {
   }
 }
 chrome.storage.onChanged.addListener(handleStorageChange);
+
+async function init() {
+  settings = await getSettings();
+}
+init();
 
 function getObjectStoreNames(databaseName) {
   return new Promise((resolve, reject) => {
@@ -374,11 +335,9 @@ async function searchDataHF(text) {
         const vectorValue = doc["embeddings"][settings.pipeline.model];
 
         if (vectorValue.length == queryVectorLength) {
-          // Only add the vector to the results set if the vector is the same length as query.
           const similarity = cos_sim(vectorValue, queryVector);
           doc["score"] = parseFloat(similarity.toPrecision(2));
           delete doc["embeddings"];
-          //scoreList.push(doc);
           topK.add(doc);
         }
         cursor.continue();
@@ -561,13 +520,15 @@ function compareArrays(array1, array2, key) {
     }
 
     let res = obj1;
+
+    res["score"] = parseFloat(maxSimilarity.toFixed(3));
     Object.keys(bestMatch).forEach((key) => {
       if (key == "embeddings") {
         return;
       }
       res[`bestMatch-${key}`] = bestMatch[key];
     });
-    res["similarity"] = maxSimilarity;
+
     result.push(res);
   }
 
@@ -595,6 +556,8 @@ async function compareStores(message) {
   return resultData;
 }
 
+// runtime.connect ports
+let ports = {};
 // listen for messages, process it, and send the result back.
 chrome.runtime.onConnect.addListener(function (port) {
   ports[port.name] = port;
@@ -693,4 +656,7 @@ chrome.runtime.onConnect.addListener(function (port) {
     });
     return;
   }
+  port.onDisconnect.addListener(function () {
+    console.warn("Port disconnected");
+  });
 });

@@ -18,22 +18,83 @@
     </head>
 
     <body style="background-color: #ebeff7">
-        <div class="container my-4">
-            <div class="row mb-2 mx-1">
-                <div class="progress px-0">
-                    <div
-                        id="progress"
-                        class="progress-bar"
-                        role="progressbar"
-                        style="width: 0%"
-                    >
-                        -
+        <nav
+            class="navbar navbar-expand-lg bg-dark border-bottom border-body"
+            data-bs-theme="dark"
+        >
+            <div class="container-fluid">
+                <span class="navbar-brand" href="#">
+                    <img
+                        src="/icons/clusters.svg"
+                        alt="simcheck"
+                        width="24"
+                        height="24"
+                    />
+                </span>
+
+                <div class="collapse navbar-collapse" id="navbarColor01">
+                    <ul class="navbar-nav me-4 mb-2 mb-lg-0">
+                        <li class="nav-item">
+                            <a class="nav-link" href="/html/import.html"
+                                >Import</a
+                            >
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/html/cluster.html"
+                                >Cluster</a
+                            >
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/html/map.html">Map</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link active" href="/html/options.html"
+                                >Options</a
+                            >
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#">Help</a>
+                        </li>
+                    </ul>
+                    <div class="input-group d-flex">
+                        <input
+                            type="text"
+                            class="form-control"
+                            placeholder="search related content"
+                            id="query"
+                            autocomplete="off"
+                        />
+                        <div class="col-2">
+                            <select
+                                class="form-select"
+                                id="tableSelect"
+                            ></select>
+                        </div>
+                        <button
+                            class="btn btn-primary"
+                            type="button"
+                            id="search"
+                        >
+                            search
+                        </button>
                     </div>
                 </div>
             </div>
-            <div class="row mb-2">
-                <h3>selected model:</h3>
-                <span id="selectedModel"></span>
+        </nav>
+        <div class="container mt-1 mb-4">
+            <div class="card mb-1">
+                <div class="card-body">
+                    <div class="progress px-0 shadow-sm">
+                        <div
+                            id="progress"
+                            class="progress-bar progress-bar-striped progress-bar-animated"
+                            role="progressbar"
+                            style="width: 0%"
+                        >
+                            -
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="row mb-2">
                 <h3>cached models</h3>
@@ -208,6 +269,6 @@
         <script src="/js/jquery.min.v3.7.1.js"></script>
         <script src="/js/bootstrap.bundle.v5.3.min.js"></script>
 
-        <script src="/js/options.js"></script>
+        <script src="/js/options.js" type="module"></script>
     </body>
 </html>

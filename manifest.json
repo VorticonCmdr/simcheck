@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "simcheck",
-  "description": "a chrome extension which uses transformers.js to generate and compare vector embeddings",
+  "description": "a chrome extension based on transformers.js to generate, compare and visualize vector embeddings",
   "version": "0.0.1",
   "permissions": [
     "activeTab",
@@ -23,7 +23,9 @@
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'"
   },
   "icons": {
-    "16": "icons/icon16.png",
-    "128": "icons/icon128.png"
+    "16": "icons/clusters16.png",
+    "32": "icons/clusters32.png",
+    "48": "icons/clusters48.png",
+    "128": "icons/clusters128.png"
   }
 }

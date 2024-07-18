@@ -312,7 +312,8 @@ function calculateWithinClusterVariance(clustersGivenK, distances, K) {
 
 function findOptimalClusters(variances) {
   if (variances.length < 2) {
-    throw new Error("Array must have at least two elements to find a peak.");
+    //throw new Error("Array must have at least two elements to find a peak.");
+    console.log("Array must have at least two elements to find a peak.");
   }
 
   let peakIndex = 0;
@@ -409,7 +410,6 @@ self.onmessage = async function (e) {
         request: data,
       };
       break;
-    // Add other cases if you need to call other methods from hclust
     default:
       result = null;
   }

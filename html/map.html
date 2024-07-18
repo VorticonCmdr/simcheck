@@ -39,7 +39,7 @@
         </div>
 
         <div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasMenu">
-            <div class="offcanvas-header">
+            <div class="offcanvas-header pb-0">
                 <h5 id="offcanvasTopLabel">menu</h5>
                 <button
                     type="button"
@@ -48,7 +48,28 @@
                     aria-label="Close"
                 ></button>
             </div>
-            <div class="offcanvas-body">
+            <div class="offcanvas-body pt-0">
+                <ul class="nav nav-underline mb-2">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/html/import.html">Import</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/html/cluster.html"
+                            >Cluster</a
+                        >
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/html/map.html">Map</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/html/options.html"
+                            >Options</a
+                        >
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#">Help</a>
+                    </li>
+                </ul>
                 <div class="d-grid mb-2">
                     <div class="form-floating">
                         <select
@@ -78,29 +99,11 @@
                     </button>
                 </div>
                 <div class="input-group mb-2">
-                    <input
-                        type="text"
-                        class="form-control w-50"
-                        placeholder="regex"
-                        id="attrRegex"
-                    />
-                    <input
-                        type="color"
-                        class="form-control form-control-color"
-                        id="urlRegexColor"
-                        value="#E20074"
-                        title="Choose your color"
-                    />
-                    <select id="colorFields" class="form-select"></select>
-                    <button
-                        class="btn btn-outline-secondary"
-                        type="button"
-                        id="urlRegexBtn"
-                    >
-                        add
-                    </button>
+                    <div class="form-floating">
+                        <select id="clusterSelect" class="form-select"></select>
+                        <label for="clusterSelect">select cluster</label>
+                    </div>
                 </div>
-                <div id="markedPoints" class="d-grid list-group mb-2"></div>
                 <div class="d-grid mb-2">
                     <button
                         id="autoColorClusters"
@@ -111,21 +114,30 @@
                         auto colors clusters
                     </button>
                 </div>
-                <div class="input-group mb-2">
-                    <div class="form-floating">
-                        <select id="clusterSelect" class="form-select"></select>
-                        <label for="clusterSelect">select cluster</label>
-                    </div>
-                </div>
-                <div class="input-group mb-2">
-                    <a
-                        id="config"
-                        class="link-underline-light"
-                        target="_top"
-                        href="/html/options.html"
-                        >more options</a
+                <div class="input-group mb-1">
+                    <input
+                        type="text"
+                        class="form-control w-25"
+                        placeholder="regex"
+                        id="attrRegex"
+                    />
+                    <select id="colorFields" class="form-select w-25"></select>
+                    <input
+                        type="color"
+                        class="form-control form-control-color"
+                        id="attrRegexColor"
+                        value="#E20074"
+                        title="Choose your color"
+                    />
+                    <button
+                        class="btn btn-outline-secondary"
+                        type="button"
+                        id="urlRegexBtn"
                     >
+                        <i class="bi bi-plus-lg"></i>
+                    </button>
                 </div>
+                <ul id="coloring" class="d-grid list-group mb-2"></ul>
             </div>
         </div>
 
@@ -200,6 +212,7 @@
 
         <script src="/js/handlebars.runtime.min.v4.7.8.js"></script>
         <script src="/templates/accordionItem.precompiled.js"></script>
+        <script src="/templates/coloring.precompiled.js"></script>
 
         <script src="/js/dbscan.js"></script>
 

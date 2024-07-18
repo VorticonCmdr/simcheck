@@ -19,7 +19,70 @@
     </head>
 
     <body style="background-color: #ebeff7">
-        <div class="container-fluid my-4">
+        <nav
+            class="navbar navbar-expand-lg bg-dark border-bottom border-body"
+            data-bs-theme="dark"
+        >
+            <div class="container-fluid">
+                <span class="navbar-brand" href="#">
+                    <img
+                        src="/icons/clusters.svg"
+                        alt="simcheck"
+                        width="24"
+                        height="24"
+                    />
+                </span>
+
+                <div class="collapse navbar-collapse" id="navbarColor01">
+                    <ul class="navbar-nav me-4 mb-2 mb-lg-0">
+                        <li class="nav-item">
+                            <a class="nav-link active" href="/html/import.html"
+                                >Import</a
+                            >
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/html/cluster.html"
+                                >Cluster</a
+                            >
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/html/map.html">Map</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/html/options.html"
+                                >Options</a
+                            >
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#">Help</a>
+                        </li>
+                    </ul>
+                    <div class="input-group d-flex">
+                        <input
+                            type="text"
+                            class="form-control"
+                            placeholder="search related content"
+                            id="query"
+                            autocomplete="off"
+                        />
+                        <div class="col-2">
+                            <select
+                                class="form-select"
+                                id="tableSelect"
+                            ></select>
+                        </div>
+                        <button
+                            class="btn btn-primary"
+                            type="button"
+                            id="search"
+                        >
+                            search
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+        <div class="container-fluid mt-1 mb-4">
             <div
                 id="warning"
                 class="alert alert-warning alert-dismissible fade show d-none mb-1 shadow"
@@ -136,25 +199,6 @@
             </div>
 
             <div class="row">
-                <div class="input-group mt-3">
-                    <label for="query" class="input-group-text"
-                        >find related text</label
-                    >
-                    <input
-                        type="text"
-                        class="form-control"
-                        placeholder="query text"
-                        id="query"
-                    />
-                    <div class="col-2">
-                        <select class="form-select" id="tableSelect"></select>
-                    </div>
-                    <button class="btn btn-primary" type="button" id="search">
-                        search
-                    </button>
-                </div>
-            </div>
-            <div class="row">
                 <div class="input-group mt-1 mb-3">
                     <label for="query" class="input-group-text"
                         >compare tables</label
@@ -186,6 +230,6 @@
 
         <script src="/js/Sortable.min.v1.15.2.js"></script>
         <script src="/js/select2.min.v4.0.13.js"></script>
-        <script src="/js/import.js"></script>
+        <script src="/js/import.js" type="module"></script>
     </body>
 </html>

@@ -4,7 +4,6 @@ const invertedCosineSimilarity = (vecA, vecB) => {
   return 1 - cos_sim(vecA, vecB);
 };
 
-// Create a new web worker
 const hclustWorker = new Worker("/js/hclust-worker.js");
 
 // Function to handle messages from the web worker
@@ -33,93 +32,29 @@ hclustWorker.onerror = function (error) {
 
 let sortable;
 let objectStoresMeta = {};
-let settings = {
-  pipeline: {
-    task: "feature-extraction",
-    model: "nomic-ai/nomic-embed-text-v1.5",
-    options: {
-      quantized: false,
-    },
-  },
-  indexedDB: {
-    databaseName: "simcheck",
-    tableName: "all",
-    keyPath: "id",
-    version: 1,
-  },
-  openai: {
-    key: "",
-  },
-};
-settings = await getSettings();
+
+const $clusterEmbeddings = $("#clusterEmbeddings");
+
+import { getSettings, setSettings } from "/js/settings.js";
+let settings;
 
 let config = {
   fields: {
     disabled: new Set(["embeddings", "clusterNumber", "order", "coordinates"]),
   },
+  umap: {
+    nComponents: 2,
+    minDist: 0.1,
+    spread: 1.0,
+    nNeighbors: 15,
+    distanceFn: invertedCosineSimilarity,
+  },
+  hclust: {
+    isEnabled: true,
+  },
 };
 
 const $progress = $("#progress");
-
-class PortConnector {
-  constructor() {
-    this.portName = "simcheck";
-    this.port = null;
-    this.reconnectDelay = 1000; // Initial reconnect delay in milliseconds
-    this.maxReconnectDelay = 30000; // Maximum reconnect delay in milliseconds
-    this.connect();
-  }
-
-  connect() {
-    this.port = chrome.runtime.connect({ name: this.portName });
-
-    // Handle incoming messages
-    this.port.onMessage.addListener(this.messageHandler.bind(this));
-
-    // Handle disconnections
-    this.port.onDisconnect.addListener(this.handleDisconnect.bind(this));
-
-    // Reset reconnect delay after a successful connection
-    this.resetReconnectDelay();
-  }
-
-  async messageHandler(message) {
-    switch (message.type) {
-      case "loading":
-        setProgressbar(message);
-        break;
-      default:
-        console.log(message);
-    }
-  }
-
-  handleDisconnect() {
-    console.log("Disconnected");
-    this.port = null;
-
-    // Reconnect with exponential backoff
-    setTimeout(() => {
-      this.reconnectDelay = Math.min(
-        this.reconnectDelay * 2,
-        this.maxReconnectDelay,
-      );
-      this.connect();
-    }, this.reconnectDelay);
-  }
-
-  resetReconnectDelay() {
-    this.reconnectDelay = 1000; // Reset to initial delay
-  }
-
-  postMessage(message) {
-    if (this.port) {
-      this.port.postMessage(message);
-    } else {
-      console.warn("Unable to send message. Port is not connected.");
-    }
-  }
-}
-const simcheckPort = new PortConnector();
 
 /*
 change progress bar based on message
@@ -154,7 +89,6 @@ function openDatabase(nextVersion, tableName, keyPath) {
     );
 
     request.onupgradeneeded = (event) => {
-      console.log(event);
       const db = event.target.result;
       // Create the object store if it doesn't exist
       if (!db.objectStoreNames.contains(tableName)) {
@@ -261,27 +195,6 @@ async function saveData(db, dataArray, keySet, tableName, keyPath) {
   });
 }
 
-function getSettings() {
-  return new Promise((resolve, reject) => {
-    chrome.storage.local.get("settings", (result) => {
-      if (result.settings !== undefined) {
-        resolve(result.settings);
-      } else {
-        setSettings();
-        resolve(null); // Or reject with an error if preferred
-      }
-    });
-  });
-}
-
-async function setSettings() {
-  chrome.storage.local.set({ ["settings"]: settings }, async () => {
-    if (chrome.runtime.lastError) {
-      console.error("Error storing data:", chrome.runtime.lastError);
-    }
-  });
-}
-
 function isNumber(value) {
   return !isNaN(value) && typeof value === "number";
 }
@@ -334,10 +247,16 @@ function clusterEmbeddings(objectStores) {
       model: settings.pipeline.model,
     };
   });
-  hclustWorker.postMessage({
-    method: "clusterData",
-    data: data,
-  });
+  if (config.hclust.isEnabled) {
+    hclustWorker.postMessage({
+      method: "clusterData",
+      data: data,
+    });
+  } else {
+    processCluster({
+      request: data,
+    });
+  }
 }
 
 async function loopTables(data) {
@@ -359,14 +278,27 @@ async function loopTables(data) {
 
 async function processCluster(response) {
   let tableData = await loopTables(response.request);
+  if (config.hclust.isEnabled) {
+    tableData.forEach((row, index) => {
+      tableData[index]["clusterNumber"] =
+        response?.clusters?.[row[response.request[0].keyPath]]?.[
+          "clusterNumber"
+        ];
+      tableData[index]["order"] =
+        response?.clusters?.[row[response.request[0].keyPath]]?.["order"];
+    });
+  }
+  if (!tableData.length) {
+    return;
+  }
 
-  tableData.forEach((row, index) => {
-    tableData[index]["clusterNumber"] =
-      response?.clusters?.[row[response.request[0].keyPath]]?.["clusterNumber"];
-    tableData[index]["order"] =
-      response?.clusters?.[row[response.request[0].keyPath]]?.["order"];
+  let tableName = response.request.map((r) => r.tableName).join("");
+  let keyPath = response.request[0].keyPath;
+
+  setProgressbar({
+    status: "generating table",
+    name: tableName,
   });
-
   generateTable(tableData);
   let reducedDimension = await reduceDimension(tableData);
   if (tableData.length == reducedDimension.length) {
@@ -374,9 +306,6 @@ async function processCluster(response) {
       tableData[index]["coordinates"] = coordinates;
     });
   }
-
-  let tableName = response.request.map((r) => r.tableName).join("");
-  let keyPath = response.request[0].keyPath;
 
   setProgressbar({
     status: "open database objectStore",
@@ -391,7 +320,7 @@ async function processCluster(response) {
   db = await openDatabase(settings.indexedDB.version + 1, tableName, keyPath);
 
   setProgressbar({
-    status: "save database object strore",
+    status: "save database object store",
     name: tableName,
   });
 
@@ -402,24 +331,19 @@ async function processCluster(response) {
 }
 
 async function reduceDimension(tableData) {
-  let umapOptions = {
-    nComponents: 2,
-    minDist: 0.1,
-    spread: 1.0,
-    nNeighbors: 15,
-    distanceFn: invertedCosineSimilarity,
-  };
-  let umap = new UMAP(umapOptions);
+  let umap = new UMAP(config.umap);
   let data = tableData.map((d) => d.embeddings[settings.pipeline.model]);
   let labels = tableData.map((d) => d.order);
-  umap.setSupervisedProjection(labels);
+  if (config.hclust.isEnabled) {
+    umap.setSupervisedProjection(labels);
+  }
 
   const nEpochs = umap.initializeFit(data);
   return umap.fitAsync(data, (epochNumber) => {
     // check progress and give user feedback, or return `false` to stop
     setProgressbar({
       status: "projecting data",
-      name: `into ${umapOptions.nComponents} dimensions`,
+      name: `into ${config.umap.nComponents} dimensions`,
       progress: (epochNumber / nEpochs) * 100,
     });
   });
@@ -490,7 +414,20 @@ async function generateObjectStoresTable() {
   $("#objectStores").html(html);
 }
 
+async function sliderSetup(id) {
+  $(`#${id}`).on("change", function () {
+    let value = $(this).val();
+    if (!value) {
+      return;
+    }
+    $(`#${id}Value`).text(value);
+    config.umap[id] = value;
+  });
+}
+
 async function init() {
+  settings = await getSettings();
+
   await generateObjectStoresTable();
   $("#objectStores").select2({
     tags: true,
@@ -509,12 +446,22 @@ async function init() {
       dataIdAttr: "title",
     });
   }
-  $("#clusterEmbeddings").on("click", function () {
+  $clusterEmbeddings.text(`start clustering ${settings.pipeline.model}`);
+  $clusterEmbeddings.on("click", function () {
     let objectStores = sortable.toArray();
     if (!objectStores.length) {
       return;
     }
     clusterEmbeddings(objectStores);
   });
+
+  $("#hclustCheckEnabled").on("change", function () {
+    let isChecked = $(this).is(":checked");
+    config.hclust.isEnabled = isChecked;
+  });
+
+  sliderSetup("nNeighbors");
+  sliderSetup("spread");
+  sliderSetup("minDist");
 }
 init();

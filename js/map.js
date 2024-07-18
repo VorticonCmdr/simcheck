@@ -1,6 +1,9 @@
 import "/js/d3.min.v7.9.0.js";
 import { getObjectStoreNamesAndMeta } from "/js/indexeddb.js";
 
+import { getSettings, setSettings } from "/js/settings.js";
+let settings;
+
 const $menuOffcanvas = new bootstrap.Offcanvas("#offcanvasMenu");
 const $bsOffcanvas = new bootstrap.Offcanvas("#offcanvasRight");
 const $clusterSelect = $("#clusterSelect");
@@ -40,48 +43,8 @@ let config = {
     disabled: new Set(["embeddings", "clusterNumber", "order", "coordinates"]),
     available: new Set(),
   },
+  regexes: [],
 };
-
-let settings = {
-  pipeline: {
-    task: "feature-extraction",
-    model: "nomic-ai/nomic-embed-text-v1.5",
-    options: {
-      quantized: false,
-    },
-  },
-  indexedDB: {
-    databaseName: "simcheck",
-    tableName: "all",
-    keyPath: "id",
-    version: 1,
-  },
-  openai: {
-    key: "",
-  },
-};
-settings = await getSettings();
-
-function getSettings() {
-  return new Promise((resolve, reject) => {
-    chrome.storage.local.get("settings", (result) => {
-      if (result.settings !== undefined) {
-        resolve(result.settings);
-      } else {
-        setSettings();
-        resolve(null); // Or reject with an error if preferred
-      }
-    });
-  });
-}
-
-async function setSettings() {
-  chrome.storage.local.set({ ["settings"]: settings }, async () => {
-    if (chrome.runtime.lastError) {
-      console.error("Error storing data:", chrome.runtime.lastError);
-    }
-  });
-}
 
 function openDatabase(nextVersion) {
   return new Promise((resolve, reject) => {
@@ -117,6 +80,7 @@ async function loadMapData(db, tableName) {
   return new Promise((resolve, reject) => {
     const transaction = db.transaction([tableName], "readonly");
     const objectStore = transaction.objectStore(tableName);
+    settings.indexedDB.keyPath = objectStore.keyPath;
     const request = objectStore.openCursor();
 
     request.onsuccess = (event) => {
@@ -155,13 +119,12 @@ function colorFields() {
   $("#colorFields").html(html);
 }
 
-async function loadData() {
-  settings.indexedDB.tableName = $("#objectStoreSelect option:selected").val();
-  setSettings();
-
+async function loadData(objectStoreName) {
   let db = await openDatabase();
   let loaded = await loadMapData(db, settings.indexedDB.tableName);
   colorFields();
+
+  setSettings();
 
   db.close();
   return loaded;
@@ -231,14 +194,25 @@ function colorClusters() {
   });
 }
 
-function colorCircles(attr, attrRegex, color) {
+function colorCircles(pattern) {
   board.circles
     .filter(function (d) {
-      return d && d?.[attr].match(attrRegex);
+      return d && d?.[pattern.attr].match(pattern.regex);
     })
-    .attr("fill", color)
+    .attr("fill", pattern.color)
     .attr("opacity", config.opacity.default)
     .attr("r", 2);
+}
+
+function colorByRegexes() {
+  $("#coloring").empty();
+  console.log("color");
+  config.regexes.forEach((pattern) => {
+    console.log(pattern);
+    colorCircles(pattern);
+  });
+  let html = Handlebars.templates.coloring(config.regexes);
+  $("#coloring").html(html);
 }
 
 // A function to check whether two bounding boxes do not overlap
@@ -553,9 +527,40 @@ async function setupObjectStoreSelect() {
   $("#objectStoreSelect").html(html);
 }
 
+function isRegex(input) {
+  // Check if the input starts and ends with a slash
+  return /^\/.*\/[gimsuy]*$/.test(input);
+}
+
+function parseInput(input) {
+  if (isRegex(input)) {
+    try {
+      // Extract the pattern and flags
+      const matches = input.match(/^\/(.*)\/([gimsuy]*)$/);
+      const pattern = matches[1];
+      const flags = matches[2];
+
+      // Create a RegExp object
+      const regex = new RegExp(pattern, flags);
+      return regex;
+    } catch (e) {
+      // Invalid regex pattern
+      return null;
+    }
+  } else {
+    // Input is a plain string
+    return input.trim();
+  }
+}
+
 async function init() {
+  settings = await getSettings();
+
   $("#regenerateMap").on("click", async function () {
-    await loadData();
+    settings.indexedDB.tableName = $(
+      "#objectStoreSelect option:selected",
+    ).val();
+    await loadData(settings.indexedDB.tableName);
     generateMap();
   });
 
@@ -565,6 +570,43 @@ async function init() {
   $("#resetZoom").on("click", resetZoom);
 
   $clusterSelect.on("change", changeCluster);
-  //colorCircles("h1", "^.{0,5}$", "#FF0000");
+
+  $("#urlRegexBtn").on("click", function () {
+    let pattern = {
+      attr: null,
+      regex: null,
+      color: null,
+    };
+    pattern.regex = $("#attrRegex").val();
+    if (!pattern.regex) {
+      console.error("missing regex");
+      return;
+    }
+    pattern.regex = parseInput(pattern.regex);
+
+    pattern.color = $("#attrRegexColor").val();
+    if (!pattern.color) {
+      console.error("missing color");
+      return;
+    }
+    pattern.attr = $("#colorFields option:selected").val();
+    if (!pattern.attr) {
+      console.error("missing attr");
+      return;
+    }
+    config.regexes.push(pattern);
+    colorByRegexes();
+  });
+  $(document).on("click", ".removeColor", function () {
+    let data = $(this).data();
+    $("#attrRegex").val(data.regex);
+    $("#attrRegexColor").val(data.color);
+    $("#colorFields").val(data.attr);
+    let indexToRemove = parseInt(data.index, 10);
+    config.regexes = config.regexes.filter(
+      (_, index) => index !== indexToRemove,
+    );
+    $("#coloring li").eq(indexToRemove).remove();
+  });
 }
 init();

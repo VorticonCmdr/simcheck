@@ -5,125 +5,57 @@ let csvData = [];
 let filename;
 let db;
 
+const $embeddingsFields = $("#embeddingsFields");
+const $generateEmbeddings = $("#generateEmbeddings");
+
 let config = {
   fields: {
-    disabled: new Set(["embeddings", "clusterNumber", "order", "coordinates"]),
+    disabled: new Set([
+      "embeddings",
+      "clusterNumber",
+      "order",
+      "coordinates",
+      "bestMatch-clusterNumber",
+      "bestMatch-order",
+      "bestMatch-coordinates",
+      "bestMatch-embeddings",
+    ]),
   },
 };
 
-let settings = {
-  pipeline: {
-    task: "feature-extraction",
-    model: "nomic-ai/nomic-embed-text-v1.5",
-    options: {
-      quantized: false,
-    },
-  },
-  indexedDB: {
-    databaseName: "simcheck",
-    tableName: "all",
-    keyPath: "id",
-    version: 1,
-  },
-  openai: {
-    key: "",
-  },
-};
+import { getSettings, setSettings } from "/js/settings.js";
+let settings;
 
-async function getSettings() {
-  chrome.storage.local.get("settings", (result) => {
-    if (result.settings !== undefined) {
-      settings = result.settings;
-    }
-    $("#generateEmbeddings").text(`generate ${settings.pipeline.model}`);
-    init();
-  });
-}
-getSettings();
+import { PortConnector } from "/js/messages.js";
+const simcheckPort = new PortConnector({
+  customMessageHandler: messageHandler,
+});
 
-async function setSettings() {
-  chrome.storage.local.set({ ["settings"]: settings }, async () => {
-    if (chrome.runtime.lastError) {
-      console.error("Error storing data:", chrome.runtime.lastError);
-    }
-  });
-}
-
-class PortConnector {
-  constructor() {
-    this.portName = "simcheck";
-    this.port = null;
-    this.reconnectDelay = 1000; // Initial reconnect delay in milliseconds
-    this.maxReconnectDelay = 30000; // Maximum reconnect delay in milliseconds
-    this.connect();
-  }
-
-  connect() {
-    this.port = chrome.runtime.connect({ name: this.portName });
-
-    // Handle incoming messages
-    this.port.onMessage.addListener(this.messageHandler.bind(this));
-
-    // Handle disconnections
-    this.port.onDisconnect.addListener(this.handleDisconnect.bind(this));
-
-    // Reset reconnect delay after a successful connection
-    this.resetReconnectDelay();
-  }
-
-  async messageHandler(message) {
-    switch (message.type) {
-      case "loading":
-        setProgressbar(message);
-        break;
-      case "storing":
-        setProgressbar(message);
-        break;
-      case "embeddings-stored":
-        $("#search").prop("disabled", false);
-        break;
-      case "serp":
-        generateTable(message.result);
-        break;
-      case "numberOfTokens":
-        $("#numberOfTokens").text(`${message.size} tokens`);
-        break;
-      case "status":
-        $("#warning-text").text(message.statusText);
-        $("#warning").removeClass("d-none");
-        break;
-      default:
-        console.log(message);
-    }
-  }
-
-  handleDisconnect() {
-    console.log("Disconnected");
-    this.port = null;
-
-    // Reconnect with exponential backoff
-    setTimeout(() => {
-      this.reconnectDelay = Math.min(
-        this.reconnectDelay * 2,
-        this.maxReconnectDelay,
-      );
-      this.connect();
-    }, this.reconnectDelay);
-  }
-
-  resetReconnectDelay() {
-    this.reconnectDelay = 1000; // Reset to initial delay
-  }
-
-  postMessage(message) {
-    if (this.port) {
-      this.port.postMessage(message);
-    } else {
-      console.warn("Unable to send message. Port is not connected.");
-    }
+async function messageHandler(message) {
+  switch (message.type) {
+    case "loading":
+      setProgressbar(message);
+      break;
+    case "storing":
+      setProgressbar(message);
+      break;
+    case "embeddings-stored":
+      $("#search").prop("disabled", false);
+      break;
+    case "serp":
+      generateTable(message.result);
+      break;
+    case "numberOfTokens":
+      $("#numberOfTokens").text(`${message.size} tokens`);
+      break;
+    case "status":
+      $("#warning-text").text(message.statusText);
+      $("#warning").removeClass("d-none");
+      break;
+    default:
+      console.log(message);
   }
 }
-const simcheckPort = new PortConnector();
 
 /*
 change progress bar based on message
@@ -213,7 +145,7 @@ function parseCsvData(textData) {
   let fieldsHtml = result?.meta?.fields.reduce((accumulator, currentValue) => {
     return `${accumulator}\n<option data-id="${currentValue}" value="${currentValue}">${currentValue}</option>`;
   }, ``);
-  $("#embeddingsFields").html(fieldsHtml);
+  $embeddingsFields.html(fieldsHtml);
 
   let idFieldsHtml = result?.meta?.fields.reduce(
     (accumulator, currentValue) => {
@@ -272,6 +204,10 @@ function getObjectStoreNames() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(settings.indexedDB.databaseName);
 
+    request.onblocked = (event) => {
+      console.warn("Database open request is blocked");
+    };
+
     request.onsuccess = (event) => {
       const db = event.target.result;
       settings.indexedDB.version = db.version;
@@ -289,6 +225,7 @@ function getObjectStoreNames() {
 
 async function handleIndexedDB() {
   let objectStoreNames = await getObjectStoreNames();
+
   try {
     let objectStores = Array.from(objectStoreNames);
     let html = objectStores
@@ -300,17 +237,23 @@ async function handleIndexedDB() {
 
     let tableSelectHtml = objectStores
       .map((objectStoreName) => {
-        return `<option value="${objectStoreName}">${objectStoreName}</option>`;
+        return `<option value="${objectStoreName}" ${settings.indexedDB.tableName == objectStoreName ? "selected" : ""}>${objectStoreName}</option>`;
       })
       .join("\n");
     $("#tableSelect").html(
       `<option selected disabled>select table to search</option>\n${tableSelectHtml}`,
     );
+
+    let compareTableSelectHtml = objectStores
+      .map((objectStoreName) => {
+        return `<option value="${objectStoreName}">${objectStoreName}</option>`;
+      })
+      .join("\n");
     $("#compareTable1").html(
-      `<option selected disabled>compare this table</option>\n${tableSelectHtml}`,
+      `<option selected disabled>compare this table</option>\n${compareTableSelectHtml}`,
     );
     $("#compareTable2").html(
-      `<option selected disabled>with that table</option>\n${tableSelectHtml}`,
+      `<option selected disabled>with that table</option>\n${compareTableSelectHtml}`,
     );
   } catch (error) {
     errorMessage(error);
@@ -354,7 +297,6 @@ async function getAllData(db, tableName) {
     $("#idFields").html(
       `<option selected disabled value="${settings.indexedDB.keyPath}">${settings.indexedDB.keyPath}</option>`,
     );
-    //const request = objectStore.getAll();
     const request = objectStore.openCursor();
 
     let docs = [];
@@ -373,7 +315,7 @@ async function getAllData(db, tableName) {
               .reduce((accumulator, currentValue) => {
                 return `${accumulator}\n<option data-id="${currentValue}" value="${currentValue}">${currentValue}</option>`;
               }, ``);
-            $("#embeddingsFields").html(fieldsHtml);
+            $embeddingsFields.html(fieldsHtml);
           }
           //resolve(event.target.result);
           resolve(docs);
@@ -467,6 +409,8 @@ function processSelectedFields(evt) {
 }
 
 async function init() {
+  settings = await getSettings();
+
   await handleIndexedDB();
 
   $(document).on("change", "#idFields", function () {
@@ -496,8 +440,11 @@ async function init() {
     }
   });
 
-  $("#generateEmbeddings").on("click", async function () {
+  $generateEmbeddings.text(`start embedding ${settings.pipeline.model}`);
+
+  $generateEmbeddings.on("click", async function () {
     if (!settings.indexedDB.keyPath) {
+      errorMessage("object store id not set");
       return;
     }
 
@@ -559,7 +506,7 @@ async function init() {
     await setSettings();
   });
 
-  $("#embeddingsFields")
+  $embeddingsFields
     .select2({
       tags: true,
       allowClear: true,
@@ -572,6 +519,7 @@ async function init() {
     .on("change", function (evt) {
       processSelectedFields(evt);
     });
+
   let sortableEl = $(".select2-selection__rendered")[0];
   if (sortableEl) {
     sortable = new Sortable(sortableEl, {
@@ -584,3 +532,4 @@ async function init() {
     });
   }
 }
+init();

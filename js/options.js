@@ -1,6 +1,12 @@
-let port = chrome.runtime.connect({ name: "simcheck" });
-// handle incoming messages
-port.onMessage.addListener(function (message) {
+import { getSettings, setSettings } from "/js/settings.js";
+let settings;
+
+import { PortConnector } from "/js/messages.js";
+const simcheckPort = new PortConnector({
+  customMessageHandler: messageHandler,
+});
+
+async function messageHandler(message) {
   switch (message.type) {
     case "loading":
       if (message.task == "done") {
@@ -11,25 +17,7 @@ port.onMessage.addListener(function (message) {
     default:
       console.log(message);
   }
-});
-
-let settings = {
-  pipeline: {
-    task: "feature-extraction",
-    model: "nomic-ai/nomic-embed-text-v1.5",
-    options: {
-      quantized: false,
-    },
-  },
-  indexedDB: {
-    databaseName: "simcheck",
-    tableName: "all",
-    keyPath: "id",
-  },
-  openai: {
-    key: "",
-  },
-};
+}
 
 /*
 change progress bar based on message
@@ -171,7 +159,11 @@ async function generateModelsTable() {
   let models = await getCachedOnnx();
   let html = Object.values(models)
     .map((model, i) => {
-      return `<tr data-model="${model.name}">
+      let classes = "";
+      if (model.name == settings.pipeline.model) {
+        classes = "table-primary";
+      }
+      return `<tr data-model="${model.name}" class="${classes}">
       <td>${linkHuggingface(model.name)}</td>
       <td>${model.quantized}</td>
       <td class="text-end">${formatBytes(model.size)}</td>
@@ -285,26 +277,9 @@ function deleteObjectStore(databaseName, storeName) {
   });
 }
 
-async function getSettings() {
-  chrome.storage.local.get("settings", (result) => {
-    if (result.settings !== undefined) {
-      settings = result.settings;
-    }
-    init();
-  });
-}
-getSettings();
-
-async function setSettings() {
-  chrome.storage.local.set({ ["settings"]: settings }, async () => {
-    if (chrome.runtime.lastError) {
-      console.error("Error storing data:", chrome.runtime.lastError);
-    }
-  });
-}
-
 async function init() {
-  $("#selectedModel").html(linkHuggingface(settings.pipeline.model));
+  settings = await getSettings();
+
   $("#openaiKey").val(settings.openai.key);
   $("#openaiKeyBtn").on("click", async function () {
     settings.openai.key = $("#openaiKey").val().trim();
@@ -326,7 +301,7 @@ async function init() {
     if (!name) {
       return;
     }
-    port.postMessage({ action: "download", name: name });
+    simcheckPort.postMessage({ action: "download", name: name });
   });
 
   $(document).on("click", "#modelsTable .bi-plugin", async function () {
@@ -367,9 +342,10 @@ async function init() {
     $("#reallyDeleteObjectStore").data("name", dataObjectStoreName);
     deleteObjectStoreQuestionModal.show();
   });
-  $("#reallyDeleteObjectStore").on("click", function () {
+  $(document).on("click", "#reallyDeleteObjectStore", async function () {
     let objectStoreName = $("#reallyDeleteObjectStore").data("name");
-    deleteObjectStore(settings.indexedDB.databaseName, objectStoreName);
+    console.log(objectStoreName);
+    await deleteObjectStore(settings.indexedDB.databaseName, objectStoreName);
     deleteObjectStoreQuestionModal.hide();
     location.reload();
   });
@@ -389,3 +365,4 @@ async function init() {
     $("#openaiKey").toggleAttribute("type", "password", "text");
   });
 }
+init();
