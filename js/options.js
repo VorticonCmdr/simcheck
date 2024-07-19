@@ -15,7 +15,7 @@ async function messageHandler(message) {
       setProgressbar(message);
       break;
     default:
-      console.log(message);
+      //console.log(message);
   }
 }
 
@@ -283,7 +283,6 @@ async function init() {
   $("#openaiKey").val(settings.openai.key);
   $("#openaiKeyBtn").on("click", async function () {
     settings.openai.key = $("#openaiKey").val().trim();
-    console.log(settings.openai.key);
     if (!settings.openai.key) {
       $("#openaiKey").addClass("border-danger border-2");
       return;
@@ -324,7 +323,7 @@ async function init() {
     $("#reallyDeleteModel").data("model", dataModelValue);
     deleteModelQuestionModal.show();
   });
-  $("#reallyDelete").on("click", function () {
+  $("#reallyDeleteModel").on("click", function () {
     let model = $("#reallyDeleteModel").data("model");
     deleteCachedRequestsWithPrefix(`https://huggingface.co/${model}`);
     deleteModelQuestionModal.hide();
@@ -344,7 +343,6 @@ async function init() {
   });
   $(document).on("click", "#reallyDeleteObjectStore", async function () {
     let objectStoreName = $("#reallyDeleteObjectStore").data("name");
-    console.log(objectStoreName);
     await deleteObjectStore(settings.indexedDB.databaseName, objectStoreName);
     deleteObjectStoreQuestionModal.hide();
     location.reload();

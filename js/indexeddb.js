@@ -44,3 +44,34 @@ function getObjectStoreMeta(db, storeName) {
     };
   });
 }
+
+export const firstEntry = async ({ databaseName = "simcheck" }, objectStoreName) => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(databaseName);
+
+    request.onsuccess = (event) => {
+      const db = event.target.result;
+      const transaction = db.transaction(objectStoreName, 'readonly');
+      const objectStore = transaction.objectStore(objectStoreName);
+
+      const cursorRequest = objectStore.openCursor();
+
+      cursorRequest.onsuccess = (event) => {
+        const cursor = event.target.result;
+        if (cursor) {
+          resolve(cursor.value); // Resolve with the first entry's value
+        } else {
+          resolve(null); // No entries in the object store
+        }
+      };
+
+      cursorRequest.onerror = (event) => {
+        reject(event.target.error);
+      };
+    };
+
+    request.onerror = (event) => {
+      reject(event.target.error);
+    };
+  });
+};

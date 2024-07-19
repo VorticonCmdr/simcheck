@@ -1,5 +1,5 @@
 import "/js/d3.min.v7.9.0.js";
-import { getObjectStoreNamesAndMeta } from "/js/indexeddb.js";
+import { getObjectStoreNamesAndMeta, firstEntry } from "/js/indexeddb.js";
 
 import { getSettings, setSettings } from "/js/settings.js";
 let settings;
@@ -29,8 +29,11 @@ let board = {
 };
 
 let config = {
+  colors: {
+    default: "#a9a9a9", //"rgb(13 110 253)",
+  },
   opacity: {
-    default: 0.7,
+    default: 0.8,
     selected: 1.0,
     unselected: 0.3,
   },
@@ -127,6 +130,7 @@ function setupSelects() {
 }
 
 async function loadData(objectStoreName) {
+  mapData = {};
   let db = await openDatabase();
   let loaded = await loadMapData(db, settings.indexedDB.tableName);
   setupSelects();
@@ -294,6 +298,8 @@ function showCluster(clickedCircle) {
       if (circle.cluster == clickedCircle.cluster) {
         if (circle === clickedCircle) {
           circle.clicked = true;
+        } else {
+          circle.clicked = false;
         }
         return true;
       }
@@ -339,6 +345,10 @@ function resetState() {
 }
 
 async function generateMap() {
+  if (board.svg) {
+    board.svg.selectAll('*').remove();
+  }
+
   $("#board").toggleClass("visible");
   $("#table").toggleClass("invisible");
   board.mapsData = Object.values(mapData);
@@ -450,7 +460,7 @@ async function generateMap() {
     .attr("cx", (d) => board.xScale(d.coordinates[0]))
     .attr("cy", (d) => board.yScale(d.coordinates[1]))
     .attr("r", 2)
-    .attr("fill", "#a9a9a9")
+    .attr("fill", config.colors.default)
     .attr("opacity", config.opacity.default)
     .attr("data-bs-toggle", "tooltip")
     .attr("data-bs-title", (d) => d[config.labels.title])
@@ -529,14 +539,12 @@ async function setupObjectStoreSelect() {
   let objectStores = await getObjectStoreNamesAndMeta(
     settings.indexedDB.databaseName,
   );
+
   let html = objectStores
-    .map((objectStore, i) => {
-      if (objectStore.name == settings.indexedDB.tableName) {
-        return `<option value="${objectStore.name}" selected>${objectStore.name}</option>`;
-      }
-      return `<option value="${objectStore.name}">${objectStore.name}</option>`;
-    })
-    .join("\n");
+    .reduce((accumulator, objectStore) => {
+      return accumulator + `<option value="${objectStore.name}">${objectStore.name}</option>`;
+    }, `<option disabled selected>datasets</option>`);
+
   $("#objectStoreSelect").html(html);
 }
 
@@ -578,6 +586,12 @@ async function init() {
   });
 
   setupObjectStoreSelect();
+  $(document).on("change", "#objectStoreSelect", async function () {
+    let name = $(this).val();
+    let res = await firstEntry({}, name);
+    config.fields.available = new Set(Object.keys(res));
+    setupSelects();
+  });
 
   $("#autoColorClusters").on("click", colorClusters);
   $("#resetZoom").on("click", resetZoom);
@@ -615,16 +629,23 @@ async function init() {
     $("#attrRegex").val(data.regex);
     $("#attrRegexColor").val(data.color);
     $("#colorFields").val(data.attr);
+    colorCircles({
+      attr: data.attr,
+      regex: data.regex,
+      color: config.colors.default,
+    });
     let indexToRemove = parseInt(data.index, 10);
+    console.log(indexToRemove);
     config.regexes = config.regexes.filter(
       (_, index) => index !== indexToRemove,
     );
     $("#coloring li").eq(indexToRemove).remove();
+    colorByRegexes();
   });
 
   $(document).on("change", "#titleSelect", function () {
     config.labels.title = $("#titleSelect option:selected").val();
-    board.labels.text((d) => d[config.labels.title]);
+    board?.labels?.text((d) => d[config.labels.title]);
   });
 
   $(document).on("change", "#descriptionSelect", function () {

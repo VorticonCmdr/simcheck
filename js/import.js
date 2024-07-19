@@ -38,6 +38,7 @@ async function messageHandler(message) {
       break;
     case "loading":
       setProgressbar(message);
+      simcheckPort.postMessage({ action: "pong" });
       break;
     case "storing":
       setProgressbar(message);
@@ -329,7 +330,7 @@ async function getAllData(db, tableName) {
     };
 
     request.onerror = (event) => {
-      ports["simcheck"].postMessage({
+      simcheckPort.postMessage({
         status: 500,
         statusText: "error getting data",
         error: event.target.error,

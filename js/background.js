@@ -38,6 +38,9 @@ chrome.storage.onChanged.addListener(handleStorageChange);
 
 async function init() {
   settings = await getSettings();
+  chrome.alarms.onAlarm.addListener((alarm) => {
+    console.log(`alarm: ${alarm.name}`);
+  });
 }
 init();
 
@@ -69,7 +72,7 @@ async function downloadModel(port, name) {
   }
   let instance = await EmbeddingsPipeline.getInstance(
     (x) => {
-      // We also add a progress callback to the pipeline so that we can
+      // a progress callback to the pipeline so that we can
       // track model downloading.
       x["type"] = "loading";
       ports["simcheck"].postMessage(x);
@@ -87,42 +90,47 @@ async function downloadModel(port, name) {
 }
 
 class EmbeddingsPipeline {
-  static instance = null;
-
   static async getInstance(
     progress_callback = null,
     task = "feature-extraction",
     model = settings.model,
     options = {},
   ) {
-    if (this.instance === null) {
-      this.instance = pipeline(task, model, {
+    //console.log("Creating new pipeline instance...");
+    try {
+      const instance = await pipeline(task, model, {
         progress_callback,
         ...options,
       });
+      //console.log("Pipeline instance created successfully.");
+      return instance;
+    } catch (error) {
+      console.error("Error creating pipeline instance:", error);
+      throw error; // rethrow the error after logging it
     }
-
-    return this.instance;
   }
 }
 
-async function createEmbeddings3(data) {
+async function createEmbeddings(data) {
   let docsLength = data.docs.length;
+  let embeddingsExtractor = await EmbeddingsPipeline.getInstance(
+    (x) => {
+      x["type"] = "loading";
+      ports["simcheck"].postMessage(x);
+    },
+    settings.pipeline.task,
+    settings.pipeline.model,
+    settings.pipeline.options,
+  );
+  await chrome.alarms.create("createEmbeddings", {
+    periodInMinutes: 0.5
+  });
   for (let index in data.docs) {
-    let extractor = await EmbeddingsPipeline.getInstance(
-      (x) => {
-        x["type"] = "loading";
-        ports["simcheck"].postMessage(x);
-      },
-      settings.pipeline.task,
-      settings.pipeline.model,
-      settings.pipeline.options,
-    );
-
     let text = data.selectedFields.reduce((accumulator, currentValue) => {
       return `${accumulator}${data.docs[index][currentValue]} `;
     }, "");
-    let embedding = await extractor(text, {
+    let embedding = await embeddingsExtractor(text, {
+      normalize: true,
       pooling: "cls",
     });
 
@@ -140,6 +148,9 @@ async function createEmbeddings3(data) {
       progress: progress,
     });
   }
+  chrome.alarms.clear("createEmbeddings", function () {
+    console.log("alarm cleared");
+  });
 
   const db = await openDatabase();
   await saveData(db, data.docs);
@@ -298,7 +309,7 @@ async function searchDataOpenAi(text) {
 
 async function searchDataHF(text) {
   // Create a feature extraction pipeline
-  let extractor = await EmbeddingsPipeline.getInstance(
+  let searchExtractor = await EmbeddingsPipeline.getInstance(
     (x) => {
       // We also add a progress callback to the pipeline so that we can
       // track model loading.
@@ -310,7 +321,7 @@ async function searchDataHF(text) {
     settings.pipeline.options,
   );
 
-  let embedding = await extractor(text, {
+  let embedding = await searchExtractor(text, {
     pooling: "cls",
   });
   const queryVector = embedding.data;
@@ -569,6 +580,9 @@ chrome.runtime.onConnect.addListener(function (port) {
             type: "pong",
           });
           break;
+        case "pong":
+          // do nothing
+          break;
         case "compare":
           let tableDate = await compareStores(message);
           port.postMessage({
@@ -644,7 +658,7 @@ chrome.runtime.onConnect.addListener(function (port) {
               docs: tableData,
             });
           } else {
-            await createEmbeddings3({
+            await createEmbeddings({
               selectedFields: message.selectedFields,
               key: settings.indexedDB.keyPath,
               docs: tableData,

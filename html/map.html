@@ -18,6 +18,13 @@
     </head>
 
     <body style="background-color: #ebeff7; overflow: hidden">
+        <div
+            id="board"
+            class="position-absolute w-100 h-100"
+            style="z-index: 0"
+        >
+            <svg id="map"></svg>
+        </div>
         <div class="container-fluid">
             <button
                 id="menuBtn"
@@ -29,13 +36,7 @@
             >
                 <i class="bi bi-sliders"></i>
             </button>
-            <div
-                id="board"
-                class="position-absolute w-100 h-100"
-                style="z-index: 0"
-            >
-                <svg id="map"></svg>
-            </div>
+
         </div>
 
         <div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasMenu">
@@ -76,7 +77,20 @@
                             class="form-select"
                             id="objectStoreSelect"
                         ></select>
-                        <label for="objectStoreSelect">select dataset</label>
+                        <label for="objectStoreSelect">select</label>
+                    </div>
+                    <div class="form-floating">
+                        <select id="titleSelect" class="form-select"></select>
+                        <label for="titleSelect">select label title</label>
+                    </div>
+                    <div class="form-floating">
+                        <select
+                            id="descriptionSelect"
+                            class="form-select"
+                        ></select>
+                        <label for="descriptionSelect"
+                            >select description</label
+                        >
                     </div>
                     <button
                         id="regenerateMap"
@@ -87,24 +101,6 @@
                         (re)generate map
                     </button>
                 </div>
-                <div class="input-group mb-2">
-                    <div class="form-floating">
-                        <select id="titleSelect" class="form-select"></select>
-                        <label for="titleSelect">select label title</label>
-                    </div>
-                </div>
-                <div class="input-group mb-2">
-                    <div class="form-floating">
-                        <select
-                            id="descriptionSelect"
-                            class="form-select"
-                        ></select>
-                        <label for="descriptionSelect"
-                            >select description</label
-                        >
-                    </div>
-                </div>
-
                 <div class="d-grid mb-2">
                     <button
                         id="resetZoom"
