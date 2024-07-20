@@ -238,24 +238,6 @@ async function generateTable(dataArray) {
     columns: columns,
     data: dataArray,
   });
-  /*
-  $("#dataTable")
-    .bootstrapTable("destroy")
-    .bootstrapTable({
-      deferredRender: true,
-      showExport: true,
-      exportTypes: ["csv"],
-      exportDataType: "all",
-      pageSize: 100,
-      pageList: [10, 100, 1000, "All"],
-      pagination: true,
-      sortOrder: "desc",
-      sortName: "clusterNumber",
-      showColumns: true,
-      columns: columns,
-      data: dataArray,
-    });
-    */
 }
 
 function clusterEmbeddings(objectStores) {
