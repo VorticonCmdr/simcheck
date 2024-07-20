@@ -176,20 +176,13 @@ async function createEmbeddings(data) {
 
   const chunkSize = 50; // Adjust this size based on performance needs
   let processedDocs = [];
+  let totalProcessed = 0;
 
   for (let i = 0; i < docsLength; i += chunkSize) {
     const chunk = data.docs.slice(i, i + chunkSize);
-    const processedChunk = await processChunk(chunk, data.selectedFields, embeddingsExtractor);
-
-    let progress = ((i + 1) / docsLength) * 100;
-    ports["simcheck"].postMessage({
-      type: "loading",
-      status: "extracting embeddings",
-      name: "rows",
-      progress: progress,
-    });
-
+    const processedChunk = await processChunk(chunk, data.selectedFields, embeddingsExtractor, totalProcessed, docsLength);
     processedDocs = processedDocs.concat(processedChunk);
+    totalProcessed += chunk.length;
     await new Promise(resolve => setTimeout(resolve, 0)); // Yield control back to the event loop
   }
 
@@ -202,8 +195,8 @@ async function createEmbeddings(data) {
     task: "done",
   });
 }
-async function processChunk(chunk, selectedFields, embeddingsExtractor) {
-  const promises = chunk.map(async (doc) => {
+async function processChunk(chunk, selectedFields, embeddingsExtractor, totalProcessed, docsLength) {
+  const promises = chunk.map(async (doc, index) => {
     let text = selectedFields.reduce((accumulator, currentValue) => {
       return `${accumulator}${doc[currentValue]} `;
     }, "");
@@ -216,6 +209,19 @@ async function processChunk(chunk, selectedFields, embeddingsExtractor) {
       doc["embeddings"] = {};
     }
     doc["embeddings"][settings.pipeline.model] = embedding.data;
+
+    // Calculate progress
+    let currentProgress = totalProcessed + index + 1;
+    let progress = Math.round((currentProgress / docsLength) * 100);
+
+    // Send progress update message
+    ports["simcheck"].postMessage({
+      type: "loading",
+      status: "extracting embeddings",
+      name: "rows",
+      progress: progress,
+    });
+
     return doc;
   });
 
@@ -706,10 +712,7 @@ chrome.runtime.onConnect.addListener(function (port) {
             });
             break;
           }
-          port.postMessage({
-            status: 202,
-            statusText: "Accepted",
-          });
+
           // eg "openai/text-embedding-3-small"
           if (settings.pipeline.model.startsWith("openai")) {
             await createOpenAiEmbeddings({
