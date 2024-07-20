@@ -1,10 +1,36 @@
-import "/js/umap-js.min.js";
-import { cos_sim } from "/js/transformers.min.js";
+import { settings, initializeSettings } from "/js/settings.js";
+
+import "/libs/umap-js.min.js";
+import { cos_sim } from "/libs/transformers.min.js";
 const invertedCosineSimilarity = (vecA, vecB) => {
   return 1 - cos_sim(vecA, vecB);
 };
 
+import { generateTable } from "/js/table.js";
+
 const hclustWorker = new Worker("/js/hclust-worker.js");
+
+// Function to use the worker to search data
+async function searchDataHF(text) {
+  return new Promise((resolve, reject) => {
+    transformersWorker.postMessage({ type: "searchDataHF", text, settings });
+
+    transformersWorker.onmessage = (e) => {
+      const { type, queryVector, error } = e.data;
+      if (type === "result") {
+        resolve(queryVector);
+      } else if (type === "error") {
+        reject(error);
+      } else if (type === "loading") {
+        console.log("Loading progress:", e.data);
+      }
+    };
+
+    transformersWorker.onerror = (error) => {
+      reject(error.message);
+    };
+  });
+}
 
 // Function to handle messages from the web worker
 hclustWorker.onmessage = function (e) {
@@ -35,13 +61,7 @@ let objectStoresMeta = {};
 
 const $clusterEmbeddings = $("#clusterEmbeddings");
 
-import { getSettings, setSettings } from "/js/settings.js";
-let settings;
-
 let config = {
-  fields: {
-    disabled: new Set(["embeddings", "order", "coordinates"]),
-  },
   umap: {
     nComponents: 2,
     minDist: 0.1,
@@ -192,51 +212,6 @@ async function saveData(db, dataArray, keySet, tableName, keyPath) {
           });
         };
       });
-  });
-}
-
-function isNumber(value) {
-  return !isNaN(value) && typeof value === "number";
-}
-
-const $dataTable = $("#dataTable");
-$dataTable.bootstrapTable({
-  deferredRender: true,
-  showExport: true,
-  exportTypes: ["csv"],
-  exportDataType: "all",
-  pageSize: 100,
-  pageList: [10, 100, 1000, "All"],
-  pagination: true,
-  sortOrder: "desc",
-  sortName: "clusterNumber",
-  showColumns: true,
-});
-async function generateTable(dataArray) {
-  if (dataArray.length == 0) {
-    return;
-  }
-  setProgressbar({
-    status: "loading",
-    name: "table",
-  });
-
-  let columns = [];
-  Object.keys(dataArray[0])
-    .filter((key) => !config.fields.disabled.has(key))
-    .forEach((key, i) => {
-      columns.push({
-        field: key,
-        title: key,
-        sortable: true,
-        searchable: false,
-        align: isNumber(dataArray[0][key]) ? "right" : "left",
-      });
-    });
-
-  $dataTable.bootstrapTable("refreshOptions", {
-    columns: columns,
-    data: dataArray,
   });
 }
 
@@ -451,7 +426,7 @@ async function sliderSetup(id) {
 }
 
 async function init() {
-  settings = await getSettings();
+  await initializeSettings();
 
   await generateObjectStoresTable();
   $("#objectStores").select2({

@@ -1,8 +1,7 @@
-import "/js/d3.min.v7.9.0.js";
+import "/libs/d3.min.v7.9.0.js";
 import { getObjectStoreNamesAndMeta, firstEntry } from "/js/indexeddb.js";
 
-import { getSettings, setSettings } from "/js/settings.js";
-let settings;
+import { settings, initializeSettings, setSettings } from "/js/settings.js";
 
 const $menuOffcanvas = new bootstrap.Offcanvas("#offcanvasMenu");
 const $bsOffcanvas = new bootstrap.Offcanvas("#offcanvasRight");
@@ -136,7 +135,7 @@ async function loadData(objectStoreName) {
   let loaded = await loadMapData(db, settings.indexedDB.tableName);
   setupSelects();
 
-  setSettings();
+  //setSettings();
 
   db.close();
   return loaded;
@@ -578,15 +577,7 @@ function parseInput(input) {
 }
 
 async function init() {
-  settings = await getSettings();
-
-  $("#regenerateMap").on("click", async function () {
-    settings.indexedDB.tableName = $(
-      "#objectStoreSelect option:selected",
-    ).val();
-    await loadData(settings.indexedDB.tableName);
-    generateMap();
-  });
+  await initializeSettings();
 
   setupObjectStoreSelect();
   $(document).on("change", "#objectStoreSelect", async function () {
@@ -594,6 +585,14 @@ async function init() {
     let res = await firstEntry({}, name);
     config.fields.available = new Set(Object.keys(res));
     setupSelects();
+  });
+
+  $("#regenerateMap").on("click", async function () {
+    settings.indexedDB.tableName = $(
+      "#objectStoreSelect option:selected",
+    ).val();
+    await loadData(settings.indexedDB.tableName);
+    generateMap();
   });
 
   $("#autoColorClusters").on("click", colorClusters);

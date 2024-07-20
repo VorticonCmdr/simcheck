@@ -3,11 +3,7 @@
   "name": "simcheck",
   "description": "a chrome extension to generate, compare and visualize vector embeddings",
   "version": "0.0.1",
-  "permissions": [
-    "storage",
-    "unlimitedStorage",
-    "alarms"
-  ],
+  "permissions": ["storage", "unlimitedStorage", "alarms"],
   "background": {
     "service_worker": "js/background.js",
     "type": "module"

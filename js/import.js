@@ -1,3 +1,5 @@
+import { settings, getSettings, setSettings } from "/js/settings.js";
+
 let selectedFields = [];
 let sortable;
 let row1 = {};
@@ -8,23 +10,7 @@ let db;
 const $embeddingsFields = $("#embeddingsFields");
 const $generateEmbeddings = $("#generateEmbeddings");
 
-let config = {
-  fields: {
-    disabled: new Set([
-      "embeddings",
-      "clusterNumber",
-      "order",
-      "coordinates",
-      "bestMatch-clusterNumber",
-      "bestMatch-order",
-      "bestMatch-coordinates",
-      "bestMatch-embeddings",
-    ]),
-  },
-};
-
-import { getSettings, setSettings } from "/js/settings.js";
-let settings;
+import { generateTable } from "/js/table.js";
 
 import { PortConnector } from "/js/messages.js";
 const simcheckPort = new PortConnector({
@@ -158,47 +144,6 @@ function parseCsvData(textData) {
     "<option selected disabled>please select id field</option>",
   );
   $("#idFields").html(idFieldsHtml);
-}
-
-function isNumber(value) {
-  return !isNaN(value) && typeof value === "number";
-}
-
-const $dataTable = $("#dataTable");
-$dataTable.bootstrapTable({
-  deferredRender: true,
-  showExport: true,
-  exportTypes: ["csv"],
-  exportDataType: "all",
-  pageSize: 100,
-  pageList: [10, 100, 1000, "All"],
-  pagination: true,
-  sortOrder: "desc",
-  sortName: "clusterNumber",
-  showColumns: true,
-});
-async function generateTable(dataArray) {
-  if (dataArray.length == 0) {
-    return;
-  }
-
-  let columns = [];
-  Object.keys(dataArray[0])
-    .filter((key) => !config.fields.disabled.has(key))
-    .forEach((key, i) => {
-      columns.push({
-        field: key,
-        title: key,
-        sortable: true,
-        searchable: false,
-        align: isNumber(dataArray[0][key]) ? "right" : "left",
-      });
-    });
-
-  $dataTable.bootstrapTable("refreshOptions", {
-    columns: columns,
-    data: dataArray,
-  });
 }
 
 async function errorMessage(error) {
@@ -415,8 +360,6 @@ function processSelectedFields(evt) {
 }
 
 async function init() {
-  settings = await getSettings();
-
   await handleIndexedDB();
 
   $(document).on("change", "#idFields", function () {
@@ -483,7 +426,7 @@ async function init() {
     if (!query) {
       return;
     }
-    simcheckPort.postMessage({ action: "search", text: query });
+    simcheckPort.postMessage({ action: "search", query, settings });
   });
 
   $("#compare").on("click", function () {

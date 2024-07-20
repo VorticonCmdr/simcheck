@@ -1,4 +1,4 @@
-export const getObjectStoreNamesAndMeta = ({ databaseName = "simcheck" }) => {
+const getObjectStoreNamesAndMeta = ({ databaseName = "simcheck" }) => {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(databaseName);
 
@@ -45,13 +45,13 @@ function getObjectStoreMeta(db, storeName) {
   });
 }
 
-export const firstEntry = async ({ databaseName = "simcheck" }, objectStoreName) => {
+const firstEntry = async ({ databaseName = "simcheck" }, objectStoreName) => {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(databaseName);
 
     request.onsuccess = (event) => {
       const db = event.target.result;
-      const transaction = db.transaction(objectStoreName, 'readonly');
+      const transaction = db.transaction(objectStoreName, "readonly");
       const objectStore = transaction.objectStore(objectStoreName);
 
       const cursorRequest = objectStore.openCursor();
@@ -75,3 +75,5 @@ export const firstEntry = async ({ databaseName = "simcheck" }, objectStoreName)
     };
   });
 };
+
+export { getObjectStoreNamesAndMeta, firstEntry };

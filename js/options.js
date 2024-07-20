@@ -1,5 +1,4 @@
-import { getSettings, setSettings } from "/js/settings.js";
-let settings;
+import { settings, setSettings, initializeSettings } from "/js/settings.js";
 
 import { PortConnector } from "/js/messages.js";
 const simcheckPort = new PortConnector({
@@ -278,7 +277,7 @@ function deleteObjectStore(databaseName, storeName) {
 }
 
 async function init() {
-  settings = await getSettings();
+  await initializeSettings();
 
   $("#openaiKey").val(settings.openai.key);
   $("#openaiKeyBtn").on("click", async function () {
@@ -287,7 +286,8 @@ async function init() {
       $("#openaiKey").addClass("border-danger border-2");
       return;
     }
-    await setSettings();
+
+    await setSettings(settings);
     $("#openaiKey").addClass("border-success border-2");
   });
 
@@ -295,6 +295,7 @@ async function init() {
 
   generateObjectStoresTable();
 
+  /*
   $("#model-name").on("change", async function () {
     let modelName = $(this).val()?.trim();
     if (!modelName?.length) {
@@ -313,8 +314,8 @@ async function init() {
     if (!siblings) {
       return;
     }
-    console.log(siblings);
   });
+  */
   $("#download").on("click", function () {
     let name = $("#model-name").val();
     if (!name) {
@@ -328,7 +329,7 @@ async function init() {
     let dataModelValue = trElement.data("model");
 
     settings.pipeline.model = dataModelValue;
-    await setSettings();
+    await setSettings(settings);
     location.reload();
   });
 

@@ -8,23 +8,23 @@ chrome.action.onClicked.addListener((tab) => {
 
 import {
   AutoTokenizer,
-  AutoConfig,
   pipeline,
-  layer_norm,
   env,
   cos_sim,
-} from "/js/transformers.min.js";
-
+} from "/libs/transformers.min.js";
 env.allowRemoteModels = true;
 env.allowLocalModels = false;
-
 // Due to a bug in onnxruntime-web, we must disable multithreading for now.
 // See https://github.com/microsoft/onnxruntime/issues/14445 for more information.
 env.backends.onnx.wasm.numThreads = 1;
 
-import { getSettings, setSettings } from "/js/settings.js";
-let settings;
+import { settings, initializeSettings } from "/js/settings.js";
+async function init() {
+  await initializeSettings();
+}
+init();
 
+/*
 function handleStorageChange(changes, namespace) {
   for (let [key, { oldValue, newValue }] of Object.entries(changes)) {
     switch (key) {
@@ -35,14 +35,7 @@ function handleStorageChange(changes, namespace) {
   }
 }
 chrome.storage.onChanged.addListener(handleStorageChange);
-
-async function init() {
-  settings = await getSettings();
-  chrome.alarms.onAlarm.addListener((alarm) => {
-    console.log(`alarm: ${alarm.name}`);
-  });
-}
-init();
+*/
 
 function getObjectStoreNames(databaseName) {
   return new Promise((resolve, reject) => {
@@ -111,57 +104,6 @@ class EmbeddingsPipeline {
   }
 }
 
-async function createEmbeddings2(data) {
-  let docsLength = data.docs.length;
-  let embeddingsExtractor = await EmbeddingsPipeline.getInstance(
-    (x) => {
-      x["type"] = "loading";
-      ports["simcheck"].postMessage(x);
-    },
-    settings.pipeline.task,
-    settings.pipeline.model,
-    settings.pipeline.options,
-  );
-  await chrome.alarms.create("createEmbeddings", {
-    periodInMinutes: 0.5,
-  });
-  for (let index in data.docs) {
-    let text = data.selectedFields.reduce((accumulator, currentValue) => {
-      return `${accumulator}${data.docs[index][currentValue]} `;
-    }, "");
-    let embedding = await embeddingsExtractor(text, {
-      normalize: true,
-      pooling: "cls",
-    });
-
-    if (!data.docs[index]["embeddings"]) {
-      data.docs[index]["embeddings"] = {};
-    }
-    data.docs[index]["embeddings"][settings.pipeline.model] = embedding.data;
-
-    let num = parseInt(index);
-    let progress = ((num + 1) / docsLength) * 100;
-    ports["simcheck"].postMessage({
-      type: "loading",
-      status: "extracting embeddings",
-      name: "rows",
-      progress: progress,
-    });
-  }
-  chrome.alarms.clear("createEmbeddings", function () {
-    console.log("alarm cleared");
-  });
-
-  const db = await openDatabase();
-  await saveData(db, data.docs);
-
-  ports["simcheck"].postMessage({
-    type: "embeddings-stored",
-    status: "embeddings stored",
-    task: "done",
-  });
-}
-
 async function createEmbeddings(data) {
   let docsLength = data.docs.length;
   let embeddingsExtractor = await EmbeddingsPipeline.getInstance(
@@ -177,13 +119,23 @@ async function createEmbeddings(data) {
   const chunkSize = 50; // Adjust this size based on performance needs
   let processedDocs = [];
   let totalProcessed = 0;
+  let totalStartTime = Date.now();
 
   for (let i = 0; i < docsLength; i += chunkSize) {
     const chunk = data.docs.slice(i, i + chunkSize);
-    const processedChunk = await processChunk(chunk, data.selectedFields, embeddingsExtractor, totalProcessed, docsLength);
+    const chunkStartTime = Date.now();
+    const processedChunk = await processChunk(
+      chunk,
+      data.selectedFields,
+      embeddingsExtractor,
+      totalProcessed,
+      docsLength,
+      totalStartTime,
+      chunkStartTime,
+    );
     processedDocs = processedDocs.concat(processedChunk);
     totalProcessed += chunk.length;
-    await new Promise(resolve => setTimeout(resolve, 0)); // Yield control back to the event loop
+    await new Promise((resolve) => setTimeout(resolve, 0)); // Yield control back to the event loop
   }
 
   const db = await openDatabase();
@@ -195,7 +147,15 @@ async function createEmbeddings(data) {
     task: "done",
   });
 }
-async function processChunk(chunk, selectedFields, embeddingsExtractor, totalProcessed, docsLength) {
+async function processChunk(
+  chunk,
+  selectedFields,
+  embeddingsExtractor,
+  totalProcessed,
+  docsLength,
+  totalStartTime,
+  chunkStartTime,
+) {
   const promises = chunk.map(async (doc, index) => {
     let text = selectedFields.reduce((accumulator, currentValue) => {
       return `${accumulator}${doc[currentValue]} `;
@@ -214,11 +174,23 @@ async function processChunk(chunk, selectedFields, embeddingsExtractor, totalPro
     let currentProgress = totalProcessed + index + 1;
     let progress = Math.round((currentProgress / docsLength) * 100);
 
+    // Calculate elapsed time and estimate remaining time
+    let elapsedTime = (Date.now() - totalStartTime) / 1000; // in seconds
+    let timePerDoc = elapsedTime / currentProgress;
+    let remainingDocs = docsLength - currentProgress;
+    let estimatedRemainingTime = timePerDoc * remainingDocs; // in seconds
+
+    // Convert remaining time to a human-readable format
+    let hours = Math.floor(estimatedRemainingTime / 3600);
+    let minutes = Math.floor((estimatedRemainingTime % 3600) / 60);
+    let seconds = Math.floor(estimatedRemainingTime % 60);
+    let remainingTimeString = `${hours}h ${minutes}m ${seconds}s`;
+
     // Send progress update message
     ports["simcheck"].postMessage({
       type: "loading",
       status: "extracting embeddings",
-      name: "rows",
+      name: `${remainingTimeString} remaining`,
       progress: progress,
     });
 
@@ -373,7 +345,7 @@ async function searchDataOpenAi(text) {
   });
 }
 
-async function searchDataHF(text) {
+async function searchDataHF(message) {
   // Create a feature extraction pipeline
   let searchExtractor = await EmbeddingsPipeline.getInstance(
     (x) => {
@@ -382,12 +354,12 @@ async function searchDataHF(text) {
       //self.postMessage(x);
       x["type"] = "loading";
     },
-    settings.pipeline.task,
-    settings.pipeline.model,
-    settings.pipeline.options,
+    message.settings.pipeline.task,
+    message.settings.pipeline.model,
+    message.settings.pipeline.options,
   );
 
-  let embedding = await searchExtractor(text, {
+  let embedding = await searchExtractor(message.query, {
     pooling: "cls",
   });
   const queryVector = embedding.data;
@@ -395,21 +367,22 @@ async function searchDataHF(text) {
 
   const db = await openDatabase();
   const transaction = db.transaction(
-    [settings.indexedDB.tableName],
+    [message.settings.indexedDB.tableName],
     "readonly",
   );
-  const objectStore = transaction.objectStore(settings.indexedDB.tableName);
+  const objectStore = transaction.objectStore(
+    message.settings.indexedDB.tableName,
+  );
   const request = objectStore.openCursor();
 
   return new Promise((resolve, reject) => {
-    //let scoreList = [];
     const topK = new TopK(10);
 
     request.onsuccess = (event) => {
       const cursor = event.target.result;
       if (cursor) {
         let doc = cursor.value;
-        const vectorValue = doc["embeddings"][settings.pipeline.model];
+        const vectorValue = doc["embeddings"][message.settings.pipeline.model];
 
         if (vectorValue.length == queryVectorLength) {
           const similarity = cos_sim(vectorValue, queryVector);
@@ -428,11 +401,6 @@ async function searchDataHF(text) {
       reject(scoreList);
     };
   });
-}
-
-async function getModelData(model) {
-  let data = await AutoConfig.from_pretrained(model);
-  return data;
 }
 
 async function getNumberOfTokens(text) {
@@ -685,13 +653,13 @@ chrome.runtime.onConnect.addListener(function (port) {
           break;
         case "search":
           if (settings.pipeline.model.startsWith("openai")) {
-            let result = await searchDataOpenAi(message.text);
+            let result = await searchDataOpenAi(message.query);
             port.postMessage({
               type: "serp",
               result: result,
             });
           } else {
-            let result = await searchDataHF(message.text);
+            let result = await searchDataHF(message);
             port.postMessage({
               type: "serp",
               result: result,
