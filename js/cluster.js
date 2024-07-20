@@ -199,6 +199,19 @@ function isNumber(value) {
   return !isNaN(value) && typeof value === "number";
 }
 
+const $dataTable = $("#dataTable");
+$dataTable.bootstrapTable({
+  deferredRender: true,
+  showExport: true,
+  exportTypes: ["csv"],
+  exportDataType: "all",
+  pageSize: 100,
+  pageList: [10, 100, 1000, "All"],
+  pagination: true,
+  sortOrder: "desc",
+  sortName: "clusterNumber",
+  showColumns: true,
+});
 async function generateTable(dataArray) {
   if (dataArray.length == 0) {
     return;
@@ -221,9 +234,15 @@ async function generateTable(dataArray) {
       });
     });
 
+  $dataTable.bootstrapTable("refreshOptions", {
+    columns: columns,
+    data: dataArray,
+  });
+  /*
   $("#dataTable")
     .bootstrapTable("destroy")
     .bootstrapTable({
+      deferredRender: true,
       showExport: true,
       exportTypes: ["csv"],
       exportDataType: "all",
@@ -236,6 +255,7 @@ async function generateTable(dataArray) {
       columns: columns,
       data: dataArray,
     });
+    */
 }
 
 function clusterEmbeddings(objectStores) {
@@ -295,17 +315,18 @@ async function processCluster(response) {
   let tableName = response.request.map((r) => r.tableName).join("");
   let keyPath = response.request[0].keyPath;
 
-  setProgressbar({
-    status: "generating table",
-    name: tableName,
-  });
-  generateTable(tableData);
   let reducedDimension = await reduceDimension(tableData);
   if (tableData.length == reducedDimension.length) {
     reducedDimension.forEach((coordinates, index) => {
       tableData[index]["coordinates"] = coordinates;
     });
   }
+
+  setProgressbar({
+    status: "generating table",
+    name: tableName,
+  });
+  generateTable(tableData);
 
   setProgressbar({
     status: "open database objectStore",
@@ -330,11 +351,33 @@ async function processCluster(response) {
   db.close();
 }
 
+function generateLabels(tableData) {
+  // Step 1: Create a frequency map
+  const frequencyMap = tableData.reduce((acc, d) => {
+    const clusterNumber = d.clusterNumber;
+    acc[clusterNumber] = (acc[clusterNumber] || 0) + 1;
+    return acc;
+  }, {});
+
+  // Step 2: Generate labels and handle single occurrences
+  let labels = tableData.map((d) => {
+    const clusterNumber = d.clusterNumber;
+    return frequencyMap[clusterNumber] === 1 ? -1 : clusterNumber;
+  });
+
+  return labels;
+}
+
 async function reduceDimension(tableData) {
   let umap = new UMAP(config.umap);
   let data = tableData.map((d) => d.embeddings[settings.pipeline.model]);
-  let labels = tableData.map((d) => d.order);
+
   if (config.hclust.isEnabled) {
+    let labels = generateLabels(tableData);
+    labels.forEach((label, index) => {
+      tableData[index].clusterNumber = label;
+      delete tableData[index]["order"];
+    });
     umap.setSupervisedProjection(labels);
   }
 

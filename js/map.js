@@ -6,6 +6,7 @@ let settings;
 
 const $menuOffcanvas = new bootstrap.Offcanvas("#offcanvasMenu");
 const $bsOffcanvas = new bootstrap.Offcanvas("#offcanvasRight");
+const $offcanvasRightElement = document.getElementById("offcanvasRight");
 const $clusterSelect = $("#clusterSelect");
 
 let mapData = {};
@@ -346,7 +347,7 @@ function resetState() {
 
 async function generateMap() {
   if (board.svg) {
-    board.svg.selectAll('*').remove();
+    board.svg.selectAll("*").remove();
   }
 
   $("#board").toggleClass("visible");
@@ -540,10 +541,12 @@ async function setupObjectStoreSelect() {
     settings.indexedDB.databaseName,
   );
 
-  let html = objectStores
-    .reduce((accumulator, objectStore) => {
-      return accumulator + `<option value="${objectStore.name}">${objectStore.name}</option>`;
-    }, `<option disabled selected>datasets</option>`);
+  let html = objectStores.reduce((accumulator, objectStore) => {
+    return (
+      accumulator +
+      `<option value="${objectStore.name}">${objectStore.name}</option>`
+    );
+  }, `<option disabled selected>datasets</option>`);
 
   $("#objectStoreSelect").html(html);
 }
@@ -650,6 +653,11 @@ async function init() {
 
   $(document).on("change", "#descriptionSelect", function () {
     config.labels.description = $("#descriptionSelect option:selected").val();
+  });
+
+  $offcanvasRightElement.addEventListener("hide.bs.offcanvas", (event) => {
+    resetState();
+    console.log("hide");
   });
 }
 init();

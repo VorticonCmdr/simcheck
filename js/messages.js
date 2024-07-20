@@ -27,7 +27,16 @@ class PortConnector {
   }
 
   keepAlive() {
-    this.postMessage({ action: "ping" });
+    if (!this.isConnected) {
+      console.log("keepAlive attempting to reconnect...");
+      this.connect();
+    }
+
+    if (this.isConnected) {
+      this.postMessage({ action: "ping" });
+    } else {
+      console.warn("Unable to send keepAlive ping. Port is not connected.");
+    }
   }
 
   disconnect() {
@@ -44,7 +53,6 @@ class PortConnector {
 
   handleDisconnect() {
     console.log("Disconnected");
-    console.log(this.port);
     this.isConnected = false;
   }
 

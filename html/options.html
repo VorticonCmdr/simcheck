@@ -81,7 +81,7 @@
                 </div>
             </div>
         </nav>
-        <div class="container mt-1 mb-4">
+        <div class="container mt-1 mb-4 px-0">
             <div class="card mb-1">
                 <div class="card-body">
                     <div class="progress px-0 shadow-sm">
@@ -96,11 +96,11 @@
                     </div>
                 </div>
             </div>
-            <div class="row mb-2">
+            <div class="mb-2">
                 <h3>cached models</h3>
                 <table
                     id="modelsTable"
-                    class="table table-striped table-hover mx-2"
+                    class="table table-striped table-hover mx-0"
                 >
                     <thead>
                         <tr>
@@ -114,7 +114,7 @@
                     <tbody id="models"></tbody>
                 </table>
             </div>
-            <div class="row pb-2 border-bottom">
+            <div class="pb-2 border-bottom">
                 <label for="model-name" class="form-label"
                     >add model name</label
                 >
@@ -129,6 +129,15 @@
                         aria-describedby="model-name model-name-helptext"
                         placeholder="sentence-transformers/all-MiniLM-L6-v2"
                     />
+                    <div class="form-floating">
+                        <select class="form-select" id="quantizedSelect">
+                            <option value="model.onnx" selected>false</option>
+                            <option value="model_quantized.onnx" disabled>
+                                true
+                            </option>
+                        </select>
+                        <label for="quantizedSelect">quantized</label>
+                    </div>
                     <button
                         class="btn btn-outline-primary"
                         type="button"
@@ -146,7 +155,7 @@
                     >
                 </div>
             </div>
-            <div class="row mt-2 pb-2 border-bottom">
+            <div class="mt-2 pb-2 border-bottom">
                 <h3>OpenAI settings</h3>
                 <label for="model-name" class="form-label"
                     >add openAI API key</label
@@ -178,11 +187,11 @@
                     >
                 </div>
             </div>
-            <div class="row mt-2 mb-2">
+            <div class="mt-2 mb-2">
                 <h3>object stores</h3>
                 <table
                     id="objectStoresTable"
-                    class="table table-striped table-hover mx-2"
+                    class="table table-striped table-hover mx-0"
                 >
                     <thead>
                         <tr>

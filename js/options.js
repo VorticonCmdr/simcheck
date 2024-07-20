@@ -15,7 +15,7 @@ async function messageHandler(message) {
       setProgressbar(message);
       break;
     default:
-      //console.log(message);
+    //console.log(message);
   }
 }
 
@@ -295,6 +295,26 @@ async function init() {
 
   generateObjectStoresTable();
 
+  $("#model-name").on("change", async function () {
+    let modelName = $(this).val()?.trim();
+    if (!modelName?.length) {
+      return;
+    }
+    let response = await fetch(
+      `https://huggingface.co/api/models/${modelName}`,
+    );
+    if (response.status != 200) {
+      return;
+    }
+    let result = await response.json();
+    let siblings = result?.siblings?.filter((sibling) =>
+      sibling.rfilename.match("onnx"),
+    );
+    if (!siblings) {
+      return;
+    }
+    console.log(siblings);
+  });
   $("#download").on("click", function () {
     let name = $("#model-name").val();
     if (!name) {

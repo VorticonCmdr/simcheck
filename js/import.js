@@ -34,7 +34,7 @@ const simcheckPort = new PortConnector({
 async function messageHandler(message) {
   switch (message.type) {
     case "pong":
-      console.log("pong");
+      //console.log("pong");
       break;
     case "loading":
       setProgressbar(message);
@@ -164,6 +164,19 @@ function isNumber(value) {
   return !isNaN(value) && typeof value === "number";
 }
 
+const $dataTable = $("#dataTable");
+$dataTable.bootstrapTable({
+  deferredRender: true,
+  showExport: true,
+  exportTypes: ["csv"],
+  exportDataType: "all",
+  pageSize: 100,
+  pageList: [10, 100, 1000, "All"],
+  pagination: true,
+  sortOrder: "desc",
+  sortName: "clusterNumber",
+  showColumns: true,
+});
 async function generateTable(dataArray) {
   if (dataArray.length == 0) {
     return;
@@ -182,21 +195,10 @@ async function generateTable(dataArray) {
       });
     });
 
-  $("#dataTable")
-    .bootstrapTable("destroy")
-    .bootstrapTable({
-      showExport: true,
-      exportTypes: ["csv"],
-      exportDataType: "all",
-      pageSize: 10,
-      pageList: [10, 100, 1000, "All"],
-      pagination: true,
-      sortOrder: "desc",
-      sortName: "score",
-      showColumns: true,
-      columns: columns,
-      data: dataArray,
-    });
+  $dataTable.bootstrapTable("refreshOptions", {
+    columns: columns,
+    data: dataArray,
+  });
 }
 
 async function errorMessage(error) {

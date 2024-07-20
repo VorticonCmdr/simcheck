@@ -123,7 +123,7 @@ async function createEmbeddings(data) {
     settings.pipeline.options,
   );
   await chrome.alarms.create("createEmbeddings", {
-    periodInMinutes: 0.5
+    periodInMinutes: 0.5,
   });
   for (let index in data.docs) {
     let text = data.selectedFields.reduce((accumulator, currentValue) => {
@@ -646,10 +646,7 @@ chrome.runtime.onConnect.addListener(function (port) {
             });
             break;
           }
-          port.postMessage({
-            status: 202,
-            statusText: "Accepted",
-          });
+
           // eg "openai/text-embedding-3-small"
           if (settings.pipeline.model.startsWith("openai")) {
             await createOpenAiEmbeddings({
