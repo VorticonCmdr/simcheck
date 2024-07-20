@@ -111,7 +111,7 @@ class EmbeddingsPipeline {
   }
 }
 
-async function createEmbeddings(data) {
+async function createEmbeddings2(data) {
   let docsLength = data.docs.length;
   let embeddingsExtractor = await EmbeddingsPipeline.getInstance(
     (x) => {
@@ -160,6 +160,66 @@ async function createEmbeddings(data) {
     status: "embeddings stored",
     task: "done",
   });
+}
+
+async function createEmbeddings(data) {
+  let docsLength = data.docs.length;
+  let embeddingsExtractor = await EmbeddingsPipeline.getInstance(
+    (x) => {
+      x["type"] = "loading";
+      ports["simcheck"].postMessage(x);
+    },
+    settings.pipeline.task,
+    settings.pipeline.model,
+    settings.pipeline.options,
+  );
+
+  const chunkSize = 50; // Adjust this size based on performance needs
+  let processedDocs = [];
+
+  for (let i = 0; i < docsLength; i += chunkSize) {
+    const chunk = data.docs.slice(i, i + chunkSize);
+    const processedChunk = await processChunk(chunk, data.selectedFields, embeddingsExtractor);
+
+    let progress = ((i + 1) / docsLength) * 100;
+    ports["simcheck"].postMessage({
+      type: "loading",
+      status: "extracting embeddings",
+      name: "rows",
+      progress: progress,
+    });
+
+    processedDocs = processedDocs.concat(processedChunk);
+    await new Promise(resolve => setTimeout(resolve, 0)); // Yield control back to the event loop
+  }
+
+  const db = await openDatabase();
+  await saveData(db, processedDocs);
+
+  ports["simcheck"].postMessage({
+    type: "embeddings-stored",
+    status: "embeddings stored",
+    task: "done",
+  });
+}
+async function processChunk(chunk, selectedFields, embeddingsExtractor) {
+  const promises = chunk.map(async (doc) => {
+    let text = selectedFields.reduce((accumulator, currentValue) => {
+      return `${accumulator}${doc[currentValue]} `;
+    }, "");
+    let embedding = await embeddingsExtractor(text, {
+      normalize: true,
+      pooling: "cls",
+    });
+
+    if (!doc["embeddings"]) {
+      doc["embeddings"] = {};
+    }
+    doc["embeddings"][settings.pipeline.model] = embedding.data;
+    return doc;
+  });
+
+  return await Promise.all(promises);
 }
 
 async function getEmbeddingsBatch(texts) {
