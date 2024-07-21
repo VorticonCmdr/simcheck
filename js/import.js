@@ -27,8 +27,15 @@ const simcheckPort = new PortConnector({
 
 chrome.storage.local.get("lastMessage", (result) => {
   if (!chrome.runtime.lastError) {
-    console.log(result.lastMessage);
-    messageHandler(result.lastMessage);
+    if (result.lastMessage !== undefined) {
+      console.log(result.lastMessage);
+      messageHandler(result.lastMessage);
+      chrome.storage.local.remove("lastMessage", () => {
+        if (chrome.runtime.lastError) {
+          console.error('Error deleting message:', chrome.runtime.lastError.message);
+        }
+      });
+    }
   }
 });
 

@@ -2,6 +2,7 @@ import { settings, initializeSettings } from "/js/settings.js";
 
 import "/libs/d3.min.v7.9.0.js";
 import { firstEntry, openDatabase } from "/js/indexeddb.js";
+import { generateTable } from "/js/table.js";
 
 const $menuOffcanvas = new bootstrap.Offcanvas("#offcanvasMenu");
 const $bsOffcanvas = new bootstrap.Offcanvas("#offcanvasRight");
@@ -279,6 +280,8 @@ function showCluster(clickedCircle) {
       color: circle.color,
     };
   });
+
+  generateTable(circles);
 
   let html = Handlebars.templates.accordionItem(items);
   $("#accordionRelated").html(html);

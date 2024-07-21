@@ -123,7 +123,7 @@
                         class="btn btn-primary"
                         data-bs-dismiss="offcanvas"
                     >
-                        auto colors clusters
+                        auto colorize data
                     </button>
                 </div>
                 <div class="input-group mb-1">
@@ -202,7 +202,9 @@
                             aria-label="Close"
                         ></button>
                     </div>
-                    <div class="modal-body">...</div>
+                    <div class="modal-body">
+                      <table id="dataTable"></table>
+                    </div>
                     <div class="modal-footer">
                         <button
                             type="button"
@@ -210,9 +212,6 @@
                             data-bs-dismiss="modal"
                         >
                             Close
-                        </button>
-                        <button type="button" class="btn btn-primary">
-                            Understood
                         </button>
                     </div>
                 </div>
@@ -225,6 +224,10 @@
         <script src="/libs/handlebars.runtime.min.v4.7.8.js"></script>
         <script src="/templates/accordionItem.precompiled.js"></script>
         <script src="/templates/coloring.precompiled.js"></script>
+
+        <script src="/libs/bootstrap-table.min.v1.22.4.js"></script>
+        <script src="/libs/tableExport.min.v1.27.0.js"></script>
+        <script src="/libs/bootstrap-table-export.min.v1.22.4.js"></script>
 
         <script src="/libs/dbscan.js"></script>
 

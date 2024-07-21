@@ -21,7 +21,7 @@ hclustWorker.onmessage = function (e) {
       break;
     case "progress":
       setProgressbar({
-        status: "clustering",
+        status: "agglomerative hierarchical clustering",
         name: "data",
         progress: message.progress * 100,
       });
@@ -46,7 +46,7 @@ let config = {
     nComponents: 2,
     minDist: 0.1,
     spread: 1.0,
-    nNeighbors: 15,
+    nNeighbors: 2,
     distanceFn: invertedCosineSimilarity,
   },
   hclust: {
