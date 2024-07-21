@@ -9,8 +9,8 @@ let settings = {
   },
   indexedDB: {
     databaseName: "simcheck",
-    tableName: "all",
-    keyPath: "id",
+    tableName: "",
+    keyPath: "",
     version: 1,
   },
   openai: {

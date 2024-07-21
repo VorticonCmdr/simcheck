@@ -1,4 +1,6 @@
 import { settings, getSettings, setSettings } from "/js/settings.js";
+import { openDatabase, getAllKeys, saveData } from "/js/indexeddb.js";
+import { setProgressbar } from "/js/progress.js";
 
 let selectedFields = [];
 let sortable;
@@ -6,6 +8,7 @@ let row1 = {};
 let csvData = [];
 let filename;
 let db;
+let textPrefix = "";
 
 const $embeddingsFields = $("#embeddingsFields");
 const $generateEmbeddings = $("#generateEmbeddings");
@@ -44,31 +47,6 @@ async function messageHandler(message) {
       break;
     default:
       console.log(message);
-  }
-}
-
-/*
-change progress bar based on message
-string message.status
-string message.name
-float message.progress between 0 and 100
-*/
-function setProgressbar(message) {
-  if (message.status && message.name && message.progress) {
-    $("#progress")
-      .css("width", `${message.progress}%`)
-      .text(
-        `${message?.status} ${message?.name} ${message?.progress.toFixed(1)}%`,
-      );
-  } else if (message.status && message.name) {
-    $("#progress").css("width", `100%`);
-    $("#progress").text(`${message?.status} ${message?.name}`);
-  } else if (message.status && message.task) {
-    $("#progress").css("width", `100%`);
-    $("#progress").text(`${message?.status} ${message?.task}`);
-  } else {
-    $("#progress").css("width", `100%`);
-    $("#progress").text(`${message?.status}`);
   }
 }
 
@@ -151,31 +129,10 @@ async function errorMessage(error) {
   $("#warning").removeClass("d-none");
 }
 
-function getObjectStoreNames() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(settings.indexedDB.databaseName);
-
-    request.onblocked = (event) => {
-      console.warn("Database open request is blocked");
-    };
-
-    request.onsuccess = (event) => {
-      const db = event.target.result;
-      settings.indexedDB.version = db.version;
-      setSettings();
-      const objectStoreNames = Array.from(db.objectStoreNames);
-      db.close();
-      resolve(objectStoreNames);
-    };
-
-    request.onerror = (event) => {
-      reject(event.target.error);
-    };
-  });
-}
-
 async function handleIndexedDB() {
-  let objectStoreNames = await getObjectStoreNames();
+  let db = await openDatabase(settings.indexedDB, true);
+  let objectStoreNames = [...db.objectStoreNames];
+  db.close();
 
   try {
     let objectStores = Array.from(objectStoreNames);
@@ -209,35 +166,6 @@ async function handleIndexedDB() {
   } catch (error) {
     errorMessage(error);
   }
-}
-
-function openDatabase() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(
-      settings.indexedDB.databaseName,
-      settings.indexedDB.version + 1,
-    );
-
-    request.onupgradeneeded = (event) => {
-      const db = event.target.result;
-      // Create the object store if it doesn't exist
-      if (!db.objectStoreNames.contains(settings.indexedDB.tableName)) {
-        db.createObjectStore(settings.indexedDB.tableName, {
-          keyPath: settings.indexedDB.keyPath,
-        });
-      }
-    };
-
-    request.onsuccess = (event) => {
-      const db = event.target.result;
-      settings.indexedDB.version = db.version;
-      resolve(db);
-    };
-
-    request.onerror = (event) => {
-      reject(event.target.error);
-    };
-  });
 }
 
 async function getAllData(db, tableName) {
@@ -287,72 +215,14 @@ async function getAllData(db, tableName) {
   });
 }
 
-function getAllKeys(db, storeName) {
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(storeName, "readonly");
-    const store = transaction.objectStore(storeName);
-    const request = store.getAllKeys();
-
-    request.onsuccess = (event) => {
-      resolve(event.target.result);
-    };
-
-    request.onerror = (event) => {
-      reject(event.target.error);
-    };
-  });
-}
-
-async function saveData(db, dataArray, keySet) {
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(
-      [settings.indexedDB.tableName],
-      "readwrite",
-    );
-    let store = transaction.objectStore(settings.indexedDB.tableName);
-
-    transaction.oncomplete = () => {
-      setProgressbar({
-        status: "storing",
-        name: "complete",
-      });
-      resolve();
-    };
-
-    transaction.onerror = (event) => {
-      reject(event.target.error);
-    };
-
-    let dataArrayLength = 0;
-    dataArray
-      .filter((item) => {
-        if (!keySet.has(item[settings.indexedDB.keyPath])) {
-          dataArrayLength++;
-          return true;
-        }
-      })
-      .forEach((data, index) => {
-        const request = store.put(data);
-        request.onerror = (event) => {
-          errorMessage(`Error saving data: ${event.target.error}`);
-        };
-        request.onsuccess = (event) => {
-          setProgressbar({
-            status: "storing",
-            name: settings.indexedDB.tableName,
-            progress: ((index + 1) / dataArrayLength) * 100,
-          });
-        };
-      });
-  });
-}
-
 function processSelectedFields(evt) {
+  textPrefix = $("#textPrefix").val()?.trim();
+
   selectedFields = sortable.toArray();
   let exampleText = selectedFields.reduce((accumulator, currentValue) => {
     return `${accumulator}${row1[currentValue]} `;
-  }, "");
-  $("#exampleText").val(exampleText);
+  }, `${textPrefix} `);
+  $("#exampleText").val(exampleText?.trim());
   simcheckPort.postMessage({
     action: "getNumberOfTokens",
     text: exampleText,
@@ -375,7 +245,7 @@ async function init() {
     if (!name) {
       return;
     }
-    let db = await openDatabase();
+    let db = await openDatabase(settings.indexedDB, true);
     try {
       let result = await getAllData(db, name);
       db.close();
@@ -397,22 +267,31 @@ async function init() {
       return;
     }
 
-    settings.indexedDB.tableName = $("#saveTableInput").val() || "all";
-    await setSettings();
+    let tableName = $("#saveTableInput").val()?.trim();
+    if (!tableName) {
+      errorMessage("object store name not set");
+      return;
+    }
+    settings.indexedDB.tableName = tableName;
+    await setSettings(settings);
 
     setProgressbar({
       status: "open table",
       name: settings.indexedDB.tableName,
     });
 
-    let db = await openDatabase();
-    let keysSet = new Set(await getAllKeys(db, settings.indexedDB.tableName));
+    let keysSet = new Set(await getAllKeys(settings.indexedDB));
 
     setProgressbar({
       status: "save table",
       name: settings.indexedDB.tableName,
     });
-    let result = await saveData(db, csvData, keysSet);
+    let result = await saveData(
+      settings.indexedDB,
+      csvData,
+      keysSet,
+      setProgressbar,
+    );
 
     simcheckPort.postMessage({
       action: "data-stored",
@@ -452,7 +331,7 @@ async function init() {
       return;
     }
     settings.indexedDB.tableName = tableName;
-    await setSettings();
+    await setSettings(settings);
   });
 
   $embeddingsFields

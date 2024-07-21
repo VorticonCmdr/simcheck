@@ -1,4 +1,9 @@
 import { settings, setSettings, initializeSettings } from "/js/settings.js";
+import {
+  getObjectStoreNamesAndSizes,
+  deleteObjectStore,
+} from "/js/indexeddb.js";
+import { setProgressbar } from "/js/progress.js";
 
 import { PortConnector } from "/js/messages.js";
 const simcheckPort = new PortConnector({
@@ -15,31 +20,6 @@ async function messageHandler(message) {
       break;
     default:
     //console.log(message);
-  }
-}
-
-/*
-change progress bar based on message
-string message.status
-string message.name
-float message.progress between 0 and 100
-*/
-function setProgressbar(message) {
-  if (message.status && message.name && message.progress) {
-    $("#progress")
-      .css("width", `${message.progress}%`)
-      .text(
-        `${message?.status} ${message?.name} ${message?.progress.toFixed(1)}%`,
-      );
-  } else if (message.status && message.name) {
-    $("#progress").css("width", `100%`);
-    $("#progress").text(`${message?.status} ${message?.name}`);
-  } else if (message.status && message.task) {
-    $("#progress").css("width", `100%`);
-    $("#progress").text(`${message?.status} ${message?.task}`);
-  } else {
-    $("#progress").css("width", `100%`);
-    $("#progress").text(`${message?.status}`);
   }
 }
 
@@ -174,55 +154,9 @@ async function generateModelsTable() {
   $("#models").html(html);
 }
 
-function getObjectStoreNamesAndSizes(databaseName) {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(databaseName);
-
-    request.onsuccess = (event) => {
-      const db = event.target.result;
-      const objectStoreNames = Array.from(db.objectStoreNames);
-      const sizesPromises = objectStoreNames.map((storeName) =>
-        getObjectStoreSize(db, storeName),
-      );
-
-      Promise.all(sizesPromises)
-        .then((sizes) => {
-          const result = objectStoreNames.map((name, index) => ({
-            name,
-            size: sizes[index],
-          }));
-          db.close();
-          resolve(result);
-        })
-        .catch((error) => {
-          db.close();
-          reject(error);
-        });
-    };
-
-    request.onerror = (event) => {
-      reject(event.target.error);
-    };
-  });
-}
-function getObjectStoreSize(db, storeName) {
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(storeName, "readonly");
-    const store = transaction.objectStore(storeName);
-    const request = store.count();
-
-    request.onsuccess = (event) => {
-      resolve(event.target.result);
-    };
-
-    request.onerror = (event) => {
-      reject(event.target.error);
-    };
-  });
-}
 async function generateObjectStoresTable() {
   let objectStoreNamesAndSizes = await getObjectStoreNamesAndSizes(
-    settings.indexedDB.databaseName,
+    settings.indexedDB,
   );
 
   let html = objectStoreNamesAndSizes
@@ -239,41 +173,6 @@ async function generateObjectStoresTable() {
     })
     .join("\n");
   $("#objectStores").html(html);
-}
-function deleteObjectStore(databaseName, storeName) {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(databaseName);
-
-    request.onsuccess = (event) => {
-      const db = event.target.result;
-      const version = db.version + 1; // Increment the version
-      db.close();
-
-      // Open the database with the new version
-      const versionRequest = indexedDB.open(databaseName, version);
-
-      versionRequest.onupgradeneeded = (event) => {
-        const upgradeDb = event.target.result;
-        if (upgradeDb.objectStoreNames.contains(storeName)) {
-          upgradeDb.deleteObjectStore(storeName);
-          console.log(`Object store '${storeName}' deleted.`);
-        }
-      };
-
-      versionRequest.onsuccess = (event) => {
-        event.target.result.close();
-        resolve(`Object store '${storeName}' deleted.`);
-      };
-
-      versionRequest.onerror = (event) => {
-        reject(event.target.error);
-      };
-    };
-
-    request.onerror = (event) => {
-      reject(event.target.error);
-    };
-  });
 }
 
 async function init() {
@@ -364,7 +263,14 @@ async function init() {
   });
   $(document).on("click", "#reallyDeleteObjectStore", async function () {
     let objectStoreName = $("#reallyDeleteObjectStore").data("name");
-    await deleteObjectStore(settings.indexedDB.databaseName, objectStoreName);
+    settings.indexedDB.version = await deleteObjectStore({
+      databaseName: settings.indexedDB.databaseName,
+      tableName: objectStoreName,
+      keyPath: settings.indexedDB.keyPath,
+      version: settings.indexedDB.version,
+    });
+    await setSettings();
+    console.log(settings);
     deleteObjectStoreQuestionModal.hide();
     location.reload();
   });

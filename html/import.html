@@ -101,7 +101,7 @@
                     <div class="progress px-0 shadow-sm">
                         <div
                             id="progress"
-                            class="progress-bar progress-bar-striped progress-bar-animated"
+                            class="progress-bar overflow-visible"
                             role="progressbar"
                             style="width: 0%"
                         >
@@ -130,7 +130,7 @@
                     <div class="row pb-2">
                         <span class="fw-5">object storage settings</span>
                         <div class="">
-                            <div class="input-group">
+                            <fieldset class="input-group">
                                 <label
                                     for="saveTableInput"
                                     class="input-group-text"
@@ -147,7 +147,7 @@
                                 />
 
                                 <datalist id="saveTableList"> </datalist>
-                            </div>
+                            </fieldset>
                         </div>
                         <div class="pb-2">
                             <div class="input-group">
@@ -162,20 +162,26 @@
                         </div>
 
                         <div class="mt-2">
+                            <div class="input-group">
+                                <input
+                                    type="text"
+                                    class="form-control"
+                                    placeholder="if you want to prefix the text"
+                                    id="textPrefix"
+                                />
+                            </div>
                             <div class="form-floating">
                                 <textarea
                                     disabled
-                                    rows="4"
                                     class="form-control fw-light h-auto d-inline-block"
                                     placeholder="example text to get embedded"
                                     id="exampleText"
+                                    style="field-sizing: content"
                                 ></textarea>
                                 <label for="exampleText" id="numberOfTokens"
                                     >example text to get embedded</label
                                 >
                             </div>
-                        </div>
-                        <div class="mb-2">
                             <div class="input-group">
                                 <select
                                     id="embeddingsFields"

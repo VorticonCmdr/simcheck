@@ -1,4 +1,6 @@
 import { settings, initializeSettings } from "/js/settings.js";
+import { openDatabase, saveData, getAllData } from "/js/indexeddb.js";
+import { setProgressbar } from "/js/progress.js";
 
 import "/libs/umap-js.min.js";
 import { cos_sim } from "/libs/transformers.min.js";
@@ -9,28 +11,6 @@ const invertedCosineSimilarity = (vecA, vecB) => {
 import { generateTable } from "/js/table.js";
 
 const hclustWorker = new Worker("/js/hclust-worker.js");
-
-// Function to use the worker to search data
-async function searchDataHF(text) {
-  return new Promise((resolve, reject) => {
-    transformersWorker.postMessage({ type: "searchDataHF", text, settings });
-
-    transformersWorker.onmessage = (e) => {
-      const { type, queryVector, error } = e.data;
-      if (type === "result") {
-        resolve(queryVector);
-      } else if (type === "error") {
-        reject(error);
-      } else if (type === "loading") {
-        console.log("Loading progress:", e.data);
-      }
-    };
-
-    transformersWorker.onerror = (error) => {
-      reject(error.message);
-    };
-  });
-}
 
 // Function to handle messages from the web worker
 hclustWorker.onmessage = function (e) {
@@ -74,147 +54,6 @@ let config = {
   },
 };
 
-const $progress = $("#progress");
-
-/*
-change progress bar based on message
-string message.status
-string message.name
-float message.progress between 0 and 100
-*/
-async function setProgressbar(message) {
-  if (message.status && message.name && message.progress) {
-    $progress
-      .css("width", `${message.progress}%`)
-      .text(
-        `${message?.status} ${message?.name} ${message?.progress.toFixed(1)}%`,
-      );
-  } else if (message.status && message.name) {
-    $progress.css("width", `100%`);
-    $progress.text(`${message?.status} ${message?.name}`);
-  } else if (message.status && message.task) {
-    $progress.css("width", `100%`);
-    $progress.text(`${message?.status} ${message?.task}`);
-  } else {
-    $progress.css("width", `100%`);
-    $progress.text(`${message?.status}`);
-  }
-}
-
-function openDatabase(nextVersion, tableName, keyPath) {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(
-      settings.indexedDB.databaseName,
-      nextVersion,
-    );
-
-    request.onupgradeneeded = (event) => {
-      const db = event.target.result;
-      // Create the object store if it doesn't exist
-      if (!db.objectStoreNames.contains(tableName)) {
-        db.createObjectStore(tableName, {
-          keyPath: keyPath,
-        });
-      }
-    };
-
-    request.onsuccess = (event) => {
-      const db = event.target.result;
-      settings.indexedDB.version = db.version;
-      resolve(db);
-    };
-
-    request.onerror = (event) => {
-      reject(event.target.error);
-    };
-  });
-}
-
-async function getAllData(db, tableName) {
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction([tableName], "readonly");
-    const objectStore = transaction.objectStore(tableName);
-    const request = objectStore.openCursor();
-
-    let docs = [];
-    request.onsuccess = (event) => {
-      const cursor = event.target.result;
-
-      function processCursor(cursor) {
-        if (cursor) {
-          docs.push(cursor.value);
-          cursor.continue();
-        } else {
-          //resolve(event.target.result);
-          resolve(docs);
-        }
-      }
-
-      processCursor(cursor);
-    };
-
-    request.onerror = (event) => {
-      reject(event.target.error);
-    };
-  });
-}
-
-function getAllKeys(db, storeName) {
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(storeName, "readonly");
-    const store = transaction.objectStore(storeName);
-    const request = store.getAllKeys();
-
-    request.onsuccess = (event) => {
-      resolve(event.target.result);
-    };
-
-    request.onerror = (event) => {
-      reject(event.target.error);
-    };
-  });
-}
-async function saveData(db, dataArray, keySet, tableName, keyPath) {
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction([tableName], "readwrite");
-    let store = transaction.objectStore(tableName);
-
-    transaction.oncomplete = () => {
-      setProgressbar({
-        status: "storing",
-        name: "complete",
-      });
-      resolve();
-    };
-
-    transaction.onerror = (event) => {
-      reject(event.target.error);
-    };
-
-    let dataArrayLength = 0;
-    dataArray
-      .filter((item) => {
-        if (!keySet.has(item[keyPath])) {
-          dataArrayLength++;
-          return true;
-        }
-      })
-      .forEach((data, index) => {
-        const request = store.put(data);
-        request.onerror = (event) => {
-          errorMessage(`Error saving data: ${event.target.error}`);
-        };
-        request.onsuccess = (event) => {
-          setProgressbar({
-            status: "storing",
-            name: tableName,
-            progress: ((index + 1) / dataArrayLength) * 100,
-          });
-        };
-      });
-  });
-}
-
 function clusterEmbeddings(objectStores) {
   let data = objectStores.map((objectStoreName) => {
     return {
@@ -243,10 +82,10 @@ async function loopTables(data) {
 
   while (dataLength--) {
     let d = data[dataLength];
-    let db = await openDatabase();
-    settings.indexedDB.version = db.version;
-    let tableData = await getAllData(db, d.tableName);
-    await db.close();
+
+    settings.indexedDB.tableName = d.tableName;
+    let tableData = await getAllData(settings.indexedDB);
+
     resultData = [...resultData, ...tableData];
   }
 
@@ -269,8 +108,10 @@ async function processCluster(response) {
     return;
   }
 
-  let tableName = response.request.map((r) => r.tableName).join("");
-  let keyPath = response.request[0].keyPath;
+  settings.indexedDB.tableName = response?.request
+    ?.map((r) => r.tableName)
+    .join("");
+  settings.indexedDB.keyPath = response.request[0].keyPath;
 
   let reducedDimension = await reduceDimension(tableData);
   if (tableData.length == reducedDimension.length) {
@@ -281,31 +122,24 @@ async function processCluster(response) {
 
   setProgressbar({
     status: "generating table",
-    name: tableName,
+    name: settings.indexedDB.tableName,
   });
   generateTable(tableData);
 
   setProgressbar({
-    status: "open database objectStore",
-    name: tableName,
-  });
-  let db = await openDatabase(
-    settings.indexedDB.version + 1,
-    tableName,
-    keyPath,
-  );
-  await db.close();
-  db = await openDatabase(settings.indexedDB.version + 1, tableName, keyPath);
-
-  setProgressbar({
     status: "save database object store",
-    name: tableName,
+    name: settings.indexedDB.tableName,
   });
 
   // empty keySet because we want to save all
   let keysSet = new Set();
-  let result = await saveData(db, tableData, keysSet, tableName, keyPath);
-  db.close();
+
+  let result = await saveData(
+    settings.indexedDB,
+    tableData,
+    keysSet,
+    setProgressbar,
+  );
 }
 
 function generateLabels(tableData) {

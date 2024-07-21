@@ -1,7 +1,7 @@
-import "/libs/d3.min.v7.9.0.js";
-import { getObjectStoreNamesAndMeta, firstEntry } from "/js/indexeddb.js";
+import { settings, initializeSettings } from "/js/settings.js";
 
-import { settings, initializeSettings, setSettings } from "/js/settings.js";
+import "/libs/d3.min.v7.9.0.js";
+import { firstEntry, openDatabase } from "/js/indexeddb.js";
 
 const $menuOffcanvas = new bootstrap.Offcanvas("#offcanvasMenu");
 const $bsOffcanvas = new bootstrap.Offcanvas("#offcanvasRight");
@@ -52,36 +52,6 @@ let config = {
   },
 };
 
-function openDatabase(nextVersion) {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(
-      settings.indexedDB.databaseName,
-      nextVersion,
-    );
-
-    request.onupgradeneeded = (event) => {
-      const db = event.target.result;
-      // Create the object store if it doesn't exist
-      if (!db.objectStoreNames.contains(settings.indexedDB.tableName)) {
-        db.createObjectStore(settings.indexedDB.tableName, {
-          keyPath: settings.indexedDB.keyPath,
-        });
-      }
-    };
-
-    request.onsuccess = (event) => {
-      const db = event.target.result;
-      settings.indexedDB.version = db.version;
-      setSettings();
-      resolve(db);
-    };
-
-    request.onerror = (event) => {
-      reject(event.target.error);
-    };
-  });
-}
-
 async function loadMapData(db, tableName) {
   return new Promise((resolve, reject) => {
     const transaction = db.transaction([tableName], "readonly");
@@ -131,11 +101,10 @@ function setupSelects() {
 
 async function loadData(objectStoreName) {
   mapData = {};
-  let db = await openDatabase();
+  let db = await openDatabase(settings.indexedDB, true);
+
   let loaded = await loadMapData(db, settings.indexedDB.tableName);
   setupSelects();
-
-  //setSettings();
 
   db.close();
   return loaded;
@@ -249,12 +218,6 @@ const getOverlapFromTwoExtents = (l, r) => {
     return false;
   }
 };
-
-function isNumber(text) {
-  // Use the isNaN() function to check if the text can be converted to a number
-  // isNaN() returns true if the argument is NaN (Not a Number), false otherwise
-  return !isNaN(parseFloat(text)) && isFinite(text);
-}
 
 function sanitizeForQuerySelector(url) {
   // Define a regex to match valid characters for querySelector
@@ -536,14 +499,14 @@ function changeCluster(e) {
 }
 
 async function setupObjectStoreSelect() {
-  let objectStores = await getObjectStoreNamesAndMeta(
-    settings.indexedDB.databaseName,
-  );
+  let db = await openDatabase(settings.indexedDB, true);
+  let objectStoreNames = [...db.objectStoreNames];
+  db.close();
 
-  let html = objectStores.reduce((accumulator, objectStore) => {
+  let html = objectStoreNames.reduce((accumulator, objectStoreName) => {
     return (
       accumulator +
-      `<option value="${objectStore.name}">${objectStore.name}</option>`
+      `<option value="${objectStoreName}">${objectStoreName}</option>`
     );
   }, `<option disabled selected>datasets</option>`);
 
