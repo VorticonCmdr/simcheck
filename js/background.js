@@ -6,6 +6,29 @@ chrome.action.onClicked.addListener((tab) => {
   );
 });
 
+chrome.alarms.create("keepAlive", { periodInMinutes: 0.5 }); // Trigger every 30 seconds
+
+function sendMessageAsync(message) {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage(message, (response) => {
+      if (chrome.runtime.lastError) {
+        //reject(new Error(chrome.runtime.lastError.message));
+        resolve(true);
+      } else {
+        resolve(response);
+      }
+    });
+  });
+}
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === "keepAlive") {
+    sendMessageAsync("keepalive");
+  }
+});
+
+let portConnected = false;
+
 import {
   AutoTokenizer,
   pipeline,
@@ -28,7 +51,7 @@ async function init() {
       // a progress callback to the pipeline so that we can
       // track model (down)loading.
       x["type"] = "loading";
-      //ports["simcheck"].postMessage(x);
+      //sendMessage(x);
       sendMessage(x);
     },
     "feature-extraction",
@@ -59,7 +82,7 @@ function getObjectStoreNames(databaseName) {
 
 async function downloadModel(port, name) {
   if (name.startsWith("openai")) {
-    ports["simcheck"].postMessage({
+    sendMessage({
       type: "loading",
       status: "openai embedding",
       task: "done",
@@ -71,13 +94,13 @@ async function downloadModel(port, name) {
       // a progress callback to the pipeline so that we can
       // track model downloading.
       x["type"] = "loading";
-      ports["simcheck"].postMessage(x);
+      sendMessage(x);
     },
     "feature-extraction",
     name,
     settings.pipeline.options,
   );
-  ports["simcheck"].postMessage({
+  sendMessage({
     type: "loading",
     status: "download",
     task: "done",
@@ -109,12 +132,23 @@ class EmbeddingsPipeline {
   }
 }
 
-// Modified sendMessage function
 async function sendMessage(message) {
+  chrome.storage.local.set({ ["lastMessage"]: message }, () => {
+    if (chrome.runtime.lastError) {
+      console.error("Error saving message:", chrome.runtime.lastError.message);
+    }
+  });
+  if (!portConnected) {
+    return;
+  }
   if (!simcheckInitialized) {
     await simcheckPromise;
   }
-  ports["simcheck"].postMessage(message);
+  try {
+    ports["simcheck"].postMessage(message);
+  } catch (e) {
+    portConnected = false;
+  }
 }
 
 async function createEmbeddings(data) {
@@ -150,7 +184,7 @@ async function createEmbeddings(data) {
     sendMessage,
   );
 
-  ports["simcheck"].postMessage({
+  sendMessage({
     type: "embeddings-stored",
     status: "embeddings stored",
     task: "done",
@@ -196,7 +230,7 @@ async function processChunk(
     let remainingTimeString = `${hours}h ${minutes}m ${seconds}s`;
 
     // Send progress update message
-    ports["simcheck"].postMessage({
+    sendMessage({
       type: "loading",
       status: "extracting embeddings",
       name: `${remainingTimeString} remaining`,
@@ -223,7 +257,7 @@ async function getEmbeddingsBatch(texts) {
   });
 
   if (!response.ok) {
-    ports["simcheck"].postMessage({
+    sendMessage({
       status: 500,
       statusText: "error calling the openAI embeddings api",
       error: response.statusText,
@@ -250,7 +284,7 @@ async function createOpenAiEmbeddings(data) {
     batches.push(batch);
   }
 
-  ports["simcheck"].postMessage({
+  sendMessage({
     type: "loading",
     status: "data from openAI api",
   });
@@ -280,10 +314,10 @@ async function createOpenAiEmbeddings(data) {
     settings.indexedDB,
     tableData,
     keysSet,
-    ports["simcheck"].postMessage,
+    sendMessage,
   );
 
-  ports["simcheck"].postMessage({
+  sendMessage({
     type: "embeddings-stored",
     status: "embeddings stored",
     task: "done",
@@ -442,7 +476,7 @@ function compareArrays(array1, array2, key) {
     let bestMatch = null;
 
     let progress = (pos1 / array1Length) * 100;
-    ports["simcheck"].postMessage({
+    sendMessage({
       type: "loading",
       status: "comparing embeddings",
       name: "rows",
@@ -520,6 +554,7 @@ let simcheckPromise = new Promise((resolve) => {
 // listen for messages, process it, and send the result back.
 chrome.runtime.onConnect.addListener(function (port) {
   ports[port.name] = port;
+  portConnected = true;
   if (port.name == "simcheck") {
     simcheckInitialized = true;
     simcheckPromiseResolve();
@@ -535,7 +570,7 @@ chrome.runtime.onConnect.addListener(function (port) {
           break;
         case "compare":
           let tableData = await compareStores(message);
-          port.postMessage({
+          sendMessage({
             type: "serp",
             result: tableData,
           });
@@ -584,11 +619,16 @@ chrome.runtime.onConnect.addListener(function (port) {
           break;
         case "data-stored":
           let storedTableData = await getAllData(message.indexedDB);
-          storedTableData = storedTableData.filter(
-            (item) => !item?.embeddings?.[settings.pipeline.model],
-          );
+
+          if (message.keepEmbeddings) {
+            storedTableData = storedTableData.filter(
+              (item) => !item?.embeddings?.[settings.pipeline.model],
+            );
+          }
+
           if (!storedTableData.length) {
             port.postMessage({
+              type: "status",
               status: 404,
               statusText: "no data to embed",
             });
@@ -621,6 +661,8 @@ chrome.runtime.onConnect.addListener(function (port) {
     return;
   }
   port.onDisconnect.addListener(function () {
+    portConnected = false;
     console.warn("Port disconnected");
+    console.log(port.name);
   });
 });

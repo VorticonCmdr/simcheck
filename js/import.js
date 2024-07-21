@@ -6,7 +6,6 @@ let selectedFields = [];
 let sortable;
 let row1 = {};
 let csvData = [];
-let filename;
 let db;
 let textPrefix = "";
 
@@ -15,12 +14,37 @@ const $generateEmbeddings = $("#generateEmbeddings");
 
 import { generateTable } from "/js/table.js";
 
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message === "keepalive") {
+    //console.log("Keep-alive message received");
+  }
+});
+
 import { PortConnector } from "/js/messages.js";
 const simcheckPort = new PortConnector({
   customMessageHandler: messageHandler,
 });
 
+chrome.storage.local.get("lastMessage", (result) => {
+  if (!chrome.runtime.lastError) {
+    console.log(result.lastMessage);
+    messageHandler(result.lastMessage);
+  }
+});
+
 async function messageHandler(message) {
+  if (message.old) {
+    switch (message.type) {
+      case "loading":
+        setProgressbar(message);
+        simcheckPort.postMessage({ action: "pong" });
+        break;
+      case "storing":
+        setProgressbar(message);
+        break;
+    }
+    return;
+  }
   switch (message.type) {
     case "pong":
       //console.log("pong");
@@ -33,7 +57,7 @@ async function messageHandler(message) {
       setProgressbar(message);
       break;
     case "embeddings-stored":
-      $("#search").prop("disabled", false);
+      setProgressbar(message);
       break;
     case "serp":
       generateTable(message.result);
@@ -42,8 +66,7 @@ async function messageHandler(message) {
       $("#numberOfTokens").text(`${message.size} tokens`);
       break;
     case "status":
-      $("#warning-text").text(message.statusText);
-      $("#warning").removeClass("d-none");
+      errorMessage(message.statusText);
       break;
     default:
       console.log(message);
@@ -82,7 +105,7 @@ function readActivities(file) {
     console.log("File is not a csv file.", file.type, file);
     return;
   }
-  filename = file.name;
+  //let filename = file.name;
 
   const reader = new FileReader();
   reader.addEventListener("load", (event) => {
@@ -293,10 +316,12 @@ async function init() {
       setProgressbar,
     );
 
+    let isChecked = $("#keepEmbeddings").is(":checked");
     simcheckPort.postMessage({
       action: "data-stored",
       indexedDB: settings.indexedDB,
       selectedFields: selectedFields,
+      keepEmbeddings: isChecked,
     });
   });
 

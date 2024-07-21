@@ -23,7 +23,7 @@ class PortConnector {
     this.isConnected = true;
 
     // Bind the keepAlive method to the current instance
-    this.keepAliveInterval = setInterval(this.keepAlive.bind(this), 5000);
+    //this.keepAliveInterval = setInterval(this.keepAlive.bind(this), 5000);
   }
 
   keepAlive() {
