@@ -1,5 +1,5 @@
 # simcheck
-a chrome extension based on transformers.js to generate, compare and visualize vector embeddings
+a chrome extension to generate, compare and visualize vector embeddings
 
 ## used libraries
 

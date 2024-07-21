@@ -186,8 +186,8 @@ async function createEmbeddings(data) {
 
   sendMessage({
     type: "embeddings-stored",
-    status: "embeddings stored",
-    task: "done",
+    status: "done",
+    task: "embeddings stored",
   });
 }
 async function processChunk(
@@ -319,7 +319,7 @@ async function createOpenAiEmbeddings(data) {
 
   sendMessage({
     type: "embeddings-stored",
-    status: "embeddings stored",
+    status: "storing embeddings",
     task: "done",
   });
 }
@@ -394,21 +394,6 @@ async function searchDataOpenAi(text) {
 }
 
 async function searchDataHF(message) {
-  // Create a feature extraction pipeline
-  /*
-  let embeddingsExtractor = await EmbeddingsPipeline.getInstance(
-    (x) => {
-      // We also add a progress callback to the pipeline so that we can
-      // track model loading.
-      //self.postMessage(x);
-      x["type"] = "loading";
-    },
-    message.settings.pipeline.task,
-    message.settings.pipeline.model,
-    message.settings.pipeline.options,
-  );
-  */
-
   let embedding = await embeddingsExtractor(message.query, {
     pooling: "cls",
   });

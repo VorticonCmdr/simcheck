@@ -30,6 +30,20 @@ async function setProgressbar(message) {
         .text(`${message?.status} ${message?.name} 100%`);
     }
   }
+  switch (message.status) {
+    case "ready":
+      $progress
+        .addClass("bg-success")
+        .css("width", "100%")
+        .text(`${message?.type} ${message?.model} ${message.status}`);
+      break;
+    case "done":
+      $progress
+        .addClass("bg-success")
+        .css("width", "100%")
+        .text(`${message?.type} ${message.status}`);
+      break;
+  }
 }
 
 export { setProgressbar };
