@@ -39,7 +39,6 @@ async function init() {
 init();
 
 import { openDatabase, getAllData, saveData } from "/js/indexeddb.js";
-import { finished } from "stream/promises";
 
 function getObjectStoreNames(databaseName) {
   return new Promise((resolve, reject) => {

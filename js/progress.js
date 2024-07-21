@@ -7,7 +7,6 @@ string message.name
 float message.progress between 0 and 100
 */
 async function setProgressbar(message) {
-  console.log(message);
   if (message.progress || message.finished) {
     if (message.progress < 100) {
       $progress
