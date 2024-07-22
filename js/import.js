@@ -32,7 +32,10 @@ chrome.storage.local.get("lastMessage", (result) => {
       messageHandler(result.lastMessage);
       chrome.storage.local.remove("lastMessage", () => {
         if (chrome.runtime.lastError) {
-          console.error('Error deleting message:', chrome.runtime.lastError.message);
+          console.error(
+            "Error deleting message:",
+            chrome.runtime.lastError.message,
+          );
         }
       });
     }
@@ -246,12 +249,12 @@ async function getAllData(db, tableName) {
 }
 
 function processSelectedFields(evt) {
-  textPrefix = $("#textPrefix").val()?.trim();
+  //textPrefix = $("#textPrefix").val()?.trim();
 
   selectedFields = sortable.toArray();
   let exampleText = selectedFields.reduce((accumulator, currentValue) => {
     return `${accumulator}${row1[currentValue]} `;
-  }, `${textPrefix} `);
+  }, "");
   $("#exampleText").val(exampleText?.trim());
   simcheckPort.postMessage({
     action: "getNumberOfTokens",

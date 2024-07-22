@@ -132,6 +132,31 @@ class EmbeddingsPipeline {
   }
 }
 
+function createNotification(message) {
+  var options = {
+    type: "basic",
+    iconUrl: "/icons/clusters48.png", // Path to your notification icon
+    title: "Simcheck",
+    message: message,
+    priority: 2,
+  };
+
+  chrome.notifications.create(
+    settings.indexedDB.databaseName,
+    options,
+    function (notificationId) {
+      if (chrome.runtime.lastError) {
+        console.error(chrome.runtime.lastError);
+      } else {
+        console.log("Notification created with ID:", notificationId);
+      }
+    },
+  );
+}
+chrome.notifications.onClicked.addListener((notificationId) => {
+  console.log("Notification clicked:", notificationId);
+});
+
 async function sendMessage(message) {
   chrome.storage.local.set({ ["lastMessage"]: message }, () => {
     if (chrome.runtime.lastError) {
@@ -189,6 +214,7 @@ async function createEmbeddings(data) {
     status: "done",
     task: "embeddings stored",
   });
+  createNotification("embeddings created and stored");
 }
 async function processChunk(
   chunk,
@@ -545,6 +571,9 @@ chrome.runtime.onConnect.addListener(function (port) {
     simcheckPromiseResolve();
     port.onMessage.addListener(async function (message) {
       switch (message.action) {
+        case "createNotification":
+          createNotification(message.text);
+          break;
         case "ping":
           port.postMessage({
             type: "pong",
@@ -640,6 +669,7 @@ chrome.runtime.onConnect.addListener(function (port) {
           port.postMessage({
             status: 404,
             statusText: "Not Found",
+            request: message,
           });
       }
     });

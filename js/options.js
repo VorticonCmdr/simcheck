@@ -289,5 +289,10 @@ async function init() {
     $(this).toggleClass(["bi-eye-slash", "bi-eye"]);
     $("#openaiKey").toggleAttribute("type", "password", "text");
   });
+
+  chrome.notifications.getPermissionLevel((level) => {
+    $("#permissionCheckDisabled").val(level == "granted" ? "on" : "off");
+    $("#permissionText").text(level);
+  });
 }
 init();

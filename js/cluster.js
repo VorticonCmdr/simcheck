@@ -22,7 +22,7 @@ hclustWorker.onmessage = function (e) {
     case "progress":
       setProgressbar({
         status: "agglomerative hierarchical clustering",
-        name: "data",
+        name: message.name,
         progress: message.progress * 100,
       });
       break;

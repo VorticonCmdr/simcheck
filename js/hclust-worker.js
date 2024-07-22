@@ -68,9 +68,30 @@ const averageDistance = (setA, setB, distances) => {
 };
 
 // update progress by calling user onProgress and postMessage for web workers
-const updateProgress = (stepNumber, stepProgress, onProgress) => {
+const updateProgress = (stepNumber, stepProgress, onProgress, startTime) => {
   // currently only two distinct steps: computing distance matrix and clustering
   const progress = stepNumber / 2 + stepProgress / 2;
+
+  // Function to estimate the remaining time
+  const estimateTimeRemaining = (startTime, progress) => {
+    const elapsedTime = Date.now() - startTime;
+    const estimatedTotalTime = elapsedTime / progress;
+    return estimatedTotalTime - elapsedTime;
+  };
+
+  // Estimate remaining time
+  const timeRemaining = estimateTimeRemaining(startTime, progress);
+
+  // Format time remaining as HH:MM:SS
+  const formatTime = (milliseconds) => {
+    const totalSeconds = Math.floor(milliseconds / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+  };
+
+  const formattedTimeRemaining = formatTime(timeRemaining);
 
   // if onProgress is defined and is a function, call onProgress
   if (typeof onProgress === "function") onProgress(progress);
@@ -80,7 +101,11 @@ const updateProgress = (stepNumber, stepProgress, onProgress) => {
     typeof WorkerGlobalScope !== "undefined" &&
     self instanceof WorkerGlobalScope
   )
-    postMessage({ type: "progress", progress });
+    postMessage({
+      type: "progress",
+      progress,
+      name: `${formattedTimeRemaining} remaining`,
+    });
 };
 
 // default onProgress function. console logs progress
@@ -98,10 +123,13 @@ const clusterData = ({
   // extract values from specified key
   if (key) data = data.map((datum) => datum[key]);
 
+  // Capture the start time at the beginning
+  let startTime = Date.now();
+
   // compute distance between each data point and every other data point
   // N x N matrix where N = data.length
   const distances = data.map((datum, index) => {
-    updateProgress(0, index / (data.length - 1), onProgress);
+    updateProgress(0, index / (data.length - 1), onProgress, startTime);
 
     // get distance between datum and other datum
     return data.map((otherDatum) => distance(datum, otherDatum));
@@ -118,7 +146,7 @@ const clusterData = ({
 
   // iterate through data
   for (let iteration = 0; iteration < data.length; iteration++) {
-    updateProgress(1, (iteration + 1) / data.length, onProgress);
+    updateProgress(1, (iteration + 1) / data.length, onProgress, startTime);
 
     // add current tree slice
     clustersGivenK.push(clusters.map((cluster) => cluster.indexes));
