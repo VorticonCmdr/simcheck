@@ -5,6 +5,10 @@ let config = {
       "clusterNumber",
       "order",
       "coordinates",
+      "embeddings2",
+      "clusterNumber2",
+      "order2",
+      "coordinates2",
       "bestMatch-clusterNumber",
       "bestMatch-order",
       "bestMatch-coordinates",
@@ -25,7 +29,35 @@ $dataTable.bootstrapTable({
   sortOrder: "desc",
   sortName: "clusterNumber",
   showColumns: true,
+  buttons: buttons,
 });
+
+// Function to dispatch a custom event with data
+function pushCustomEvent(eventName, data) {
+  const event = new CustomEvent(eventName, { detail: data });
+  window.dispatchEvent(event);
+}
+function buttons() {
+  return {
+    btnAdd: {
+      text: "compare rows",
+      icon: "bi-ui-checks",
+      event: function () {
+        let rows = $dataTable.bootstrapTable("getSelections");
+        if (!rows.length) {
+          return;
+        }
+        if (rows.length > 2) {
+          return;
+        }
+        pushCustomEvent("getSelections", rows);
+      },
+      attributes: {
+        title: "Add a new row to the table",
+      },
+    },
+  };
+}
 
 function isNumber(value) {
   return !isNaN(value) && typeof value === "number";
@@ -36,7 +68,14 @@ async function generateTable(dataArray) {
     return;
   }
 
-  let columns = [];
+  let columns = [
+    {
+      field: "state",
+      sortable: false,
+      searchable: false,
+      checkbox: true,
+    },
+  ];
   Object.keys(dataArray[0])
     .filter((key) => !config.fields.disabled.has(key))
     .forEach((key, i) => {

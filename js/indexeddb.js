@@ -257,6 +257,43 @@ async function saveData(settings, dataArray, keySet, progressFunction) {
   });
 }
 
+async function getFilteredData(settings, keyPathSet) {
+  try {
+    const db = await openDatabase(settings, true);
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([settings.tableName], "readonly");
+      const objectStore = transaction.objectStore(settings.tableName);
+      const request = objectStore.openCursor();
+
+      let docs = [];
+      request.onsuccess = (event) => {
+        const cursor = event.target.result;
+
+        function processCursor(cursor) {
+          if (cursor) {
+            if (keyPathSet.has(cursor.value[cursor?.source?.keyPath])) {
+              docs.push(cursor.value);
+            }
+            cursor.continue();
+          } else {
+            db.close();
+            resolve(docs);
+          }
+        }
+
+        processCursor(cursor);
+      };
+
+      request.onerror = (event) => {
+        db.close();
+        reject(event.target.error);
+      };
+    });
+  } catch (error) {
+    throw new Error(`Failed to open database: ${error.message}`);
+  }
+}
+
 async function getAllData(settings) {
   try {
     const db = await openDatabase(settings, true);
@@ -291,6 +328,7 @@ async function getAllData(settings) {
     throw new Error(`Failed to open database: ${error.message}`);
   }
 }
+
 export {
   getObjectStoreNamesAndMeta,
   firstEntry,
@@ -300,4 +338,5 @@ export {
   getAllKeys,
   saveData,
   getAllData,
+  getFilteredData,
 };

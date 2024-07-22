@@ -1,5 +1,10 @@
 import { settings, getSettings, setSettings } from "/js/settings.js";
-import { openDatabase, getAllKeys, saveData } from "/js/indexeddb.js";
+import {
+  openDatabase,
+  getAllKeys,
+  saveData,
+  getFilteredData,
+} from "/js/indexeddb.js";
 import { setProgressbar } from "/js/progress.js";
 
 let selectedFields = [];
@@ -82,6 +87,43 @@ async function messageHandler(message) {
       console.log(message);
   }
 }
+
+// Function to handle the custom event
+async function handleGetSelections(event) {
+  const data = event.detail;
+  let keyPaths = data.map((d) => d[settings.indexedDB.keyPath]);
+  if (!keyPaths.length) {
+    return;
+  }
+  let keyPathSet = new Set(keyPaths);
+  //console.log(keyPaths);
+  let results = await getFilteredData(settings.indexedDB, keyPathSet);
+  if (!results.length || results.length !== 2) {
+    return;
+  }
+
+  if (!results[0]?.["embeddings"]?.[settings.pipeline.model]) {
+    return;
+  }
+  if (!results[1]?.["embeddings"]?.[settings.pipeline.model]) {
+    return;
+  }
+  results[0]["embeddings"][settings.pipeline.model] = Array.from(
+    results[0]["embeddings"][settings.pipeline.model],
+  );
+  results[1]["embeddings"][settings.pipeline.model] = Array.from(
+    results[1]["embeddings"][settings.pipeline.model],
+  );
+
+  simcheckPort.postMessage({
+    action: "compareEmbeddings",
+    obj1: results[0],
+    obj2: results[1],
+    modelName: settings.pipeline.model,
+  });
+}
+// Listen for the custom event
+window.addEventListener("getSelections", handleGetSelections);
 
 // handle CSV data
 const dropArea = document.getElementById("drop-area");

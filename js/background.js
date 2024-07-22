@@ -419,6 +419,31 @@ async function searchDataOpenAi(text) {
   });
 }
 
+function mergeObjects(obj1, obj2, suffix) {
+  let result = { ...obj1 };
+
+  for (let key in obj2) {
+    if (obj2.hasOwnProperty(key)) {
+      result[`${key}${suffix}`] = obj2[key];
+    }
+  }
+
+  return result;
+}
+function compareEmbeddings(obj1, obj2, modelName) {
+  let vector1 = obj1?.["embeddings"]?.[modelName];
+  let vector2 = obj2?.["embeddings"]?.[modelName];
+  if (!vector1 || !vector2) {
+    return [];
+  }
+  const similarity = cos_sim(vector1, vector2);
+
+  obj1 = mergeObjects({ score: similarity?.toFixed(3) }, obj1, "");
+  let result = mergeObjects(obj1, obj2, "2");
+
+  return [result];
+}
+
 async function searchDataHF(message) {
   let embedding = await embeddingsExtractor(message.query, {
     pooling: "cls",
@@ -453,7 +478,6 @@ async function searchDataHF(message) {
         }
         cursor.continue();
       } else {
-        searchExtractor.dispose();
         resolve(topK.getTopK());
       }
     };
@@ -573,6 +597,17 @@ chrome.runtime.onConnect.addListener(function (port) {
       switch (message.action) {
         case "createNotification":
           createNotification(message.text);
+          break;
+        case "compareEmbeddings":
+          let compareTableData = compareEmbeddings(
+            message.obj1,
+            message.obj2,
+            message.modelName,
+          );
+          sendMessage({
+            type: "serp",
+            result: compareTableData,
+          });
           break;
         case "ping":
           port.postMessage({
