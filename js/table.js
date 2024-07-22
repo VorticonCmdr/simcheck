@@ -30,6 +30,7 @@ $dataTable.bootstrapTable({
   sortName: "clusterNumber",
   showColumns: true,
   buttons: buttons,
+  buttonsClass: "outline-secondary",
 });
 
 // Function to dispatch a custom event with data
@@ -39,8 +40,28 @@ function pushCustomEvent(eventName, data) {
 }
 function buttons() {
   return {
-    btnAdd: {
-      text: "compare rows",
+    btnSaveCSV: {
+      text: "save csv",
+      icon: "bi-filetype-csv text-primary",
+      event: function () {
+        pushCustomEvent("saveCSV", "");
+      },
+      attributes: {
+        title: "save table data to csv",
+      },
+    },
+    btnSaveJSONL: {
+      text: "save jsonl",
+      icon: "bi-filetype-raw text-success",
+      event: function () {
+        pushCustomEvent("saveJSONL", "");
+      },
+      attributes: {
+        title: "save table data to jsonl",
+      },
+    },
+    btnCompare: {
+      text: "compare 2 rows",
       icon: "bi-ui-checks",
       event: function () {
         let rows = $dataTable.bootstrapTable("getSelections");
@@ -53,7 +74,7 @@ function buttons() {
         pushCustomEvent("getSelections", rows);
       },
       attributes: {
-        title: "Add a new row to the table",
+        title: "compare 2 rows of embeddings",
       },
     },
   };
@@ -94,4 +115,56 @@ async function generateTable(dataArray) {
   });
 }
 
-export { generateTable };
+// Convert Float32Array to a regular array recursively
+function convertTypedArrays(obj) {
+  if (obj instanceof Float32Array) {
+    return Array.from(obj);
+  } else if (Array.isArray(obj)) {
+    return obj.map(convertTypedArrays);
+  } else if (typeof obj === "object" && obj !== null) {
+    return Object.fromEntries(
+      Object.entries(obj).map(([k, v]) => [k, convertTypedArrays(v)]),
+    );
+  } else {
+    return obj;
+  }
+}
+
+function saveDataAsFile(filename, type, data) {
+  const blob = new Blob([data], { type: type });
+  const url = URL.createObjectURL(blob);
+
+  chrome.downloads.download(
+    {
+      url: url,
+      filename: filename,
+      saveAs: true,
+    },
+    function (downloadId) {
+      if (chrome.runtime.lastError) {
+        console.error(`Error: ${chrome.runtime.lastError}`);
+      } else {
+        console.log(`Download started with ID: ${downloadId}`);
+      }
+      // Revoke the object URL after the download starts
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    },
+  );
+}
+
+function stashData(key, value, callback) {
+  let data = {};
+
+  data[key] = convertTypedArrays(value);
+
+  chrome.storage.session.set(data, function () {
+    if (chrome.runtime.lastError) {
+      console.error(`Error: ${JSON.stringify(chrome.runtime.lastError)}`);
+    } else {
+      console.log("Data stashed successfully.");
+      if (callback) callback();
+    }
+  });
+}
+
+export { generateTable, stashData, convertTypedArrays, saveDataAsFile };

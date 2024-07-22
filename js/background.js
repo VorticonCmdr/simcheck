@@ -190,7 +190,6 @@ async function createEmbeddings(data) {
     const processedChunk = await processChunk(
       chunk,
       data.selectedFields,
-      //embeddingsExtractor,
       totalProcessed,
       docsLength,
       totalStartTime,
@@ -501,7 +500,7 @@ async function getNumberOfTokens(text) {
   return input_ids.size;
 }
 
-function compareArrays(array1, array2, key) {
+async function compareArrays(array1, array2, key) {
   const result = [];
   let array1Length = array1.length;
   let pos1 = 1;
@@ -532,6 +531,8 @@ function compareArrays(array1, array2, key) {
         bestMatch = obj2;
       }
     }
+    // Yield control back to the event loop
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     let res = obj1;
 
@@ -574,7 +575,7 @@ async function compareStores(message) {
     console.log("datastore empty");
     return [];
   }
-  resultData = compareArrays(array1, array2, settings.pipeline.model);
+  resultData = await compareArrays(array1, array2, settings.pipeline.model);
 
   return resultData;
 }

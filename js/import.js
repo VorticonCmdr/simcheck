@@ -17,7 +17,11 @@ let textPrefix = "";
 const $embeddingsFields = $("#embeddingsFields");
 const $generateEmbeddings = $("#generateEmbeddings");
 
-import { generateTable } from "/js/table.js";
+import {
+  generateTable,
+  saveDataAsFile,
+  convertTypedArrays,
+} from "/js/table.js";
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message === "keepalive") {
@@ -33,7 +37,6 @@ const simcheckPort = new PortConnector({
 chrome.storage.local.get("lastMessage", (result) => {
   if (!chrome.runtime.lastError) {
     if (result.lastMessage !== undefined) {
-      console.log(result.lastMessage);
       messageHandler(result.lastMessage);
       chrome.storage.local.remove("lastMessage", () => {
         if (chrome.runtime.lastError) {
@@ -75,6 +78,7 @@ async function messageHandler(message) {
       setProgressbar(message);
       break;
     case "serp":
+      csvData = message.result;
       generateTable(message.result);
       break;
     case "numberOfTokens":
@@ -122,8 +126,24 @@ async function handleGetSelections(event) {
     modelName: settings.pipeline.model,
   });
 }
+function handleSaveCSV(event) {
+  let csv = Papa.unparse(csvData);
+  saveDataAsFile("data.csv", "text/csv", csv);
+}
+function arrayToJsonl(array) {
+  return array.reduce((jsonl, item) => {
+    return jsonl + JSON.stringify(item) + "\n";
+  }, "");
+}
+function handleSaveJSONL(event) {
+  const convertedDataArray = convertTypedArrays(csvData);
+  const jsonlString = arrayToJsonl(convertedDataArray);
+  saveDataAsFile("data.jsonl", "text/jsonl", jsonlString);
+}
 // Listen for the custom event
 window.addEventListener("getSelections", handleGetSelections);
+window.addEventListener("saveCSV", handleSaveCSV);
+window.addEventListener("saveJSONL", handleSaveJSONL);
 
 // handle CSV data
 const dropArea = document.getElementById("drop-area");
