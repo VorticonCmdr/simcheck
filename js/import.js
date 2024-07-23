@@ -403,6 +403,7 @@ async function init() {
       return;
     }
     simcheckPort.postMessage({ action: "search", query, settings });
+    //simcheckPort.postMessage({ action: "findCentralItems", settings, query });
   });
 
   $("#compare").on("click", function () {

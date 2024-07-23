@@ -46,6 +46,9 @@ let embeddingsExtractor = null;
 import { settings, initializeSettings } from "/js/settings.js";
 async function init() {
   await initializeSettings();
+  if (settings.pipeline.model.startsWith("openai")) {
+    return;
+  }
   embeddingsExtractor = await EmbeddingsPipeline.getInstance(
     (x) => {
       // a progress callback to the pipeline so that we can
@@ -330,14 +333,16 @@ async function createOpenAiEmbeddings(data) {
         data.docs[docIndex]["embeddings"] = {};
       }
       data.docs[docIndex]["embeddings"][settings.pipeline.model] =
-        embeddingsResponse.data[embeddingsResponseIndex].embedding;
+        Float32Array.from(
+          embeddingsResponse.data[embeddingsResponseIndex].embedding,
+        );
     }
   }
 
   let keysSet = new Set();
   let result = await saveData(
     settings.indexedDB,
-    tableData,
+    data.docs,
     keysSet,
     sendMessage,
   );
@@ -441,6 +446,26 @@ function compareEmbeddings(obj1, obj2, modelName) {
   let result = mergeObjects(obj1, obj2, "2");
 
   return [result];
+}
+
+async function searchDataset(dataset, settings, query) {
+  let embedding = await embeddingsExtractor(query, {
+    pooling: "cls",
+  });
+  const queryVector = embedding.data;
+  const queryVectorLength = queryVector.length;
+  const topK = new TopK(5);
+
+  dataset.forEach((doc) => {
+    const vectorValue = doc["embeddings"][settings.pipeline.model];
+    if (vectorValue.length == queryVectorLength) {
+      const similarity = cos_sim(vectorValue, queryVector);
+      doc["score"] = parseFloat(similarity.toPrecision(2));
+      topK.add(doc);
+    }
+  });
+
+  return topK.getTopK();
 }
 
 async function searchDataHF(message) {
@@ -580,6 +605,52 @@ async function compareStores(message) {
   return resultData;
 }
 
+function findCentralItems(dataset, settings, similarityFunction) {
+  // Group items by clusterNumber
+  const clusters = {};
+  dataset.forEach((item) => {
+    const clusterNumber = item.clusterNumber;
+    if (!clusters[clusterNumber]) {
+      clusters[clusterNumber] = [];
+    }
+    clusters[clusterNumber].push(item);
+  });
+
+  // Find the central item in each cluster
+  Object.keys(clusters).forEach((clusterNumber) => {
+    const cluster = clusters[clusterNumber];
+    let centralItem = null;
+    let maxSimilaritySum = -Infinity;
+
+    cluster.forEach((item) => {
+      let similaritySum = 0;
+
+      cluster.forEach((otherItem) => {
+        if (item !== otherItem) {
+          const itemEmbedding = item.embeddings[settings.pipeline.model];
+          const otherItemEmbedding =
+            otherItem.embeddings[settings.pipeline.model];
+          similaritySum += similarityFunction(
+            itemEmbedding,
+            otherItemEmbedding,
+          );
+        }
+      });
+
+      if (similaritySum > maxSimilaritySum) {
+        maxSimilaritySum = similaritySum;
+        centralItem = item;
+      }
+    });
+
+    if (centralItem) {
+      centralItem.central = true;
+    }
+  });
+
+  return dataset;
+}
+
 // runtime.connect ports
 let ports = {};
 let simcheckInitialized = false;
@@ -596,6 +667,16 @@ chrome.runtime.onConnect.addListener(function (port) {
     simcheckPromiseResolve();
     port.onMessage.addListener(async function (message) {
       switch (message.action) {
+        case "findCentralItems":
+          let dataset = await getAllData(message.settings.indexedDB);
+          let centralItemsResult = findCentralItems(dataset, settings, cos_sim);
+          let cres = await searchDataset(
+            centralItemsResult.filter((d) => d.central),
+            message.settings,
+            message.query,
+          );
+          console.log(cres);
+          break;
         case "createNotification":
           createNotification(message.text);
           break;

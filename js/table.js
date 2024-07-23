@@ -2,7 +2,6 @@ let config = {
   fields: {
     disabled: new Set([
       "embeddings",
-      "clusterNumber",
       "order",
       "coordinates",
       "embeddings2",
