@@ -19,9 +19,7 @@ let config = {
 const $dataTable = $("#dataTable");
 $dataTable.bootstrapTable({
   deferredRender: true,
-  showExport: true,
-  exportTypes: ["csv"],
-  exportDataType: "all",
+  showExport: false,
   pageSize: 100,
   pageList: [10, 100, 1000, "All"],
   pagination: true,
