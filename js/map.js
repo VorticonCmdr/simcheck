@@ -47,9 +47,12 @@ let config = {
     available: new Set(),
   },
   regexes: [],
+  circles: {
+    size: 1,
+  },
   labels: {
-    title: "H1-1",
-    description: "Meta Description 1",
+    title: "title",
+    description: "description",
   },
 };
 
@@ -91,7 +94,11 @@ function setupSelects() {
       return !config.fields.disabled.has(name);
     })
     .reduce((accumulator, currentValue) => {
-      return `${accumulator}\n<option value="${currentValue}">${currentValue}</option>`;
+      let selected = "";
+      if (currentValue == config.labels.title) {
+        selected = "selected";
+      }
+      return `${accumulator}\n<option value="${currentValue}" ${selected}>${currentValue}</option>`;
     }, ``);
   $("#colorFields").html(html);
   $("#titleSelect").html(html);
@@ -111,8 +118,63 @@ async function loadData(objectStoreName) {
   return loaded;
 }
 
-function handleZoom(e) {
-  d3.selectAll(".datalayer").attr("transform", e.transform);
+// Throttle function implementation
+function throttle(func, limit) {
+    let lastFunc;
+    let lastRan;
+    return function() {
+        const context = this;
+        const args = arguments;
+        if (!lastRan) {
+            func.apply(context, args);
+            lastRan = Date.now();
+        } else {
+            clearTimeout(lastFunc);
+            lastFunc = setTimeout(function() {
+                if ((Date.now() - lastRan) >= limit) {
+                    func.apply(context, args);
+                    lastRan = Date.now();
+                }
+            }, limit - (Date.now() - lastRan));
+        }
+    };
+}
+
+// Function to get all circles currently in view
+function getVisibleCircles() {
+    const svg = document.querySelector('svg');
+    const svgRect = svg.getBoundingClientRect();
+    const circles = svg.querySelectorAll('circle');
+    const visibleCircles = [];
+
+    circles.forEach(circle => {
+        const circleRect = circle.getBoundingClientRect();
+
+        // Check if circle is in view
+        if (
+            circleRect.right > svgRect.left &&
+            circleRect.left < svgRect.right &&
+            circleRect.bottom > svgRect.top &&
+            circleRect.top < svgRect.bottom
+        ) {
+            visibleCircles.push(circle);
+        }
+    });
+
+    const circleIds = visibleCircles.map(circle => `#${circle.id}`);
+    return d3.selectAll(circleIds.join(', '));
+}
+
+const throttledGetVisibleCircles = throttle(() => {
+    const visibleCircles = getVisibleCircles();
+    //visibleCircles.attr("stroke", "blue");
+}, 200);
+
+
+function handleZoom(event) {
+  //throttledGetVisibleCircles();
+  //svg.attr("transform", event.transform);
+  d3.selectAll(".datalayer").attr("transform", event.transform);
 }
 
 function resetZoom() {
@@ -171,7 +233,7 @@ function colorClusters() {
       })
       .attr("fill", color)
       .attr("opacity", config.opacity.default)
-      .attr("r", 2);
+      .attr("r", config.circles.size);
   });
 }
 
@@ -182,7 +244,7 @@ function colorCircles(pattern) {
     })
     .attr("fill", pattern.color)
     .attr("opacity", config.opacity.default)
-    .attr("r", 2);
+    .attr("r", config.circles.size);
 }
 
 function colorByRegexes() {
@@ -251,6 +313,29 @@ function centerNode(id) {
     });
 }
 
+function getCircleCoordinates(clickedCircle) {
+  const selectedCircles = board["circles"].filter(function (circle) {
+    if (circle.cluster == clickedCircle.cluster) {
+      if (circle === clickedCircle) {
+        circle.clicked = true;
+      } else {
+        circle.clicked = false;
+      }
+      return true;
+    }
+    return false;
+  });
+
+  // Extract x/y coordinates
+  const coordinates = selectedCircles.nodes().map(circle => {
+    const cx = parseFloat(circle.getAttribute('cx'));
+    const cy = parseFloat(circle.getAttribute('cy'));
+    return { x: cx, y: cy };
+  });
+
+  return coordinates;
+}
+
 function showCluster(clickedCircle) {
   $("#offcanvasRightLabel").text("");
   $("#offcanvasRightLabel").text(clickedCircle.cluster);
@@ -270,6 +355,40 @@ function showCluster(clickedCircle) {
       return false;
     })
     .data();
+
+  /*
+  const points = getCircleCoordinates(clickedCircle);
+  const scaleFactor = 1.1; // Factor to scale points outward
+
+  // Compute the centroid of the points
+  const centroid = points.reduce((acc, point) => {
+      acc.x += point.x;
+      acc.y += point.y;
+      return acc;
+  }, {x: 0, y: 0});
+
+  centroid.x /= points.length;
+  centroid.y /= points.length;
+
+  // Scale points outward from the centroid
+  const scaledPoints = points.map(point => {
+      const dx = point.x - centroid.x;
+      const dy = point.y - centroid.y;
+      return {
+          x: centroid.x + dx * scaleFactor,
+          y: centroid.y + dy * scaleFactor
+      };
+  });
+
+  const hull = d3.polygonHull(scaledPoints.map(d => [d.x, d.y]));
+  const hullPathData = d3.line()(hull);
+  board.svg.append('path')
+          .style("stroke", "lightblue")
+          .style("fill-opacity", "0.3")
+          .style("fill", "none")
+            .attr('class', 'datalayer hull')
+            .attr('d', hullPathData + 'Z'); // 'Z' closes the path
+  */
 
   let items = circles.map((circle) => {
     return {
@@ -310,6 +429,14 @@ function resetState() {
   board["circles"].attr("opacity", config.opacity.default).attr("stroke", null);
 }
 
+function debounce(func, wait) {
+    let timeout;
+    return function(...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+    };
+}
+
 async function generateMap() {
   if (board.svg) {
     board.svg.selectAll("*").remove();
@@ -330,17 +457,24 @@ async function generateMap() {
     .attr("height", board.height)
     .attr("width", board.width);
 
-  board["zoom"] = d3.zoom().on("zoom", (event) => {
-    svg.attr("transform", event.transform);
-  });
+  board["zoom"] = d3
+    .zoom()
+    .on("zoom", (event) => {
+      svg.attr("transform", event.transform);
+    });
 
   board["zoom"] = d3
     .zoom()
-    //.filter(event => !activeBrush)
     .filter((event) => {
       return !board.activeBrush;
     })
-    .on("zoom", handleZoom);
+    .on("start", () => {
+      board["labels"].style("display", "none");
+    })
+    .on("zoom", handleZoom)
+    .on("end", () => {
+      board["labels"].style("display", null);
+    });
 
   // initZoom
   board["zoomer"] = d3.select("svg").call(board["zoom"]);
@@ -357,8 +491,7 @@ async function generateMap() {
 
   board["labels"] = board.svg
     .append("g")
-    .attr("id", "labels")
-    .attr("class", "datalayer")
+    .attr("class", "datalayer labels")
     .attr("font-size", 10)
     .selectAll("text")
     .data(board.mapsData)
@@ -415,8 +548,7 @@ async function generateMap() {
   // append circles last to be on top
   board["circles"] = board.svg
     .append("g")
-    .attr("id", "circles")
-    .attr("class", "datalayer")
+    .attr("class", "datalayer circles")
     .selectAll("circle")
     .data(board.mapsData)
     .join("circle")
@@ -425,21 +557,16 @@ async function generateMap() {
     })
     .attr("cx", (d) => board.xScale(d.coordinates[0]))
     .attr("cy", (d) => board.yScale(d.coordinates[1]))
-    .attr("r", 2)
+    .attr("r", config.circles.size)
     .attr("fill", config.colors.default)
     .attr("opacity", config.opacity.default)
     .attr("data-bs-toggle", "tooltip")
     .attr("data-bs-title", (d) => d[config.labels.title])
     .on("click", circleClick);
 
-  let tooltipTriggerList = document.querySelectorAll(
-    '[data-bs-toggle="tooltip"]',
-  );
-  let tooltipList = [...tooltipTriggerList]
-    .filter((tooltipTriggerEl) =>
-      tooltipTriggerEl.getAttribute("data-bs-title"),
-    )
-    .map((tooltipTriggerEl) => new bootstrap.Tooltip(tooltipTriggerEl));
+  prepareBlurMap(board.circles, 2);
+
+  initializeTooltips();
 
   board.svg.on("click", (event) => {
     if (event.target.tagName !== "circle") {
@@ -454,11 +581,114 @@ async function generateMap() {
     }
   });
 
-  let bboxes = [];
+
   $clusterSelect.append(`<option disabled selected>to center</option>`);
   board.setCentroids.forEach((item, i) => {
-    let cid = `#c${sanitizeForQuerySelector(item[settings.indexedDB.keyPath])}`;
-    let tid = `#t${sanitizeForQuerySelector(item[settings.indexedDB.keyPath])}`;
+    $clusterSelect.append(`<option value="${item?.[settings.indexedDB.keyPath]}">${item?.[config.labels.title]}</option>`);
+  });
+
+  setupBoundingBoxes();
+
+}
+
+function prepareBlurMap(circles, sigma) {
+  const data = getCoordinatesFromCircles(circles);
+
+  const width = board.width; // Width of the grid
+  const height = board.height; // Height of the grid
+  const gridSize = 3; // Size of each grid cell
+
+  let gridWidth = Math.ceil(width / gridSize);
+  let gridHeight = Math.ceil(height / gridSize);
+  let grid = Array.from({ length: gridHeight }, () => Array(gridWidth).fill(0));
+
+  // Map points to grid
+  data.forEach(point => {
+    const x = Math.floor(point.x / gridSize);
+    const y = Math.floor(point.y / gridSize);
+    grid[y][x] += 1;
+  });
+
+  let blurredGrid = gaussianBlur(grid, sigma, gridWidth, gridHeight, gridSize);
+
+  const customColorScale = d3.scaleLinear()
+    .domain([0, d3.max(blurredGrid.flat())])
+    .range(['rgb(235, 239, 247)', 'rgb(144, 224, 190)']);
+
+
+  board.svg
+    .insert('g', ':first-child')
+    .attr("class", "datalayer grid")
+    .selectAll('rect')
+    .data(blurredGrid.flat())
+    .enter()
+    .append('rect')
+    .attr('x', (d, i) => (i % gridWidth) * gridSize)
+    .attr('y', (d, i) => Math.floor(i / gridWidth) * gridSize)
+    .attr('width', gridSize)
+    .attr('height', gridSize)
+    .attr('fill', d => customColorScale(d));
+}
+
+function gaussianBlur(grid, sigma, gridWidth, gridHeight, gridSize) {
+  let kernelSize = Math.ceil(sigma * 3);
+  let kernel = [];
+  let kernelSum = 0;
+
+  // Create Gaussian kernel
+  for (let y = -kernelSize; y <= kernelSize; y++) {
+    for (let x = -kernelSize; x <= kernelSize; x++) {
+      const value = Math.exp(-(x * x + y * y) / (2 * sigma * sigma));
+      kernel.push({ x, y, value });
+      kernelSum += value;
+    }
+  }
+
+  let blurredGrid = Array.from({ length: gridHeight }, () => Array(gridWidth).fill(0));
+
+  // Apply kernel to grid
+  for (let y = 0; y < gridHeight; y++) {
+    for (let x = 0; x < gridWidth; x++) {
+      let sum = 0;
+      kernel.forEach(({ x: kx, y: ky, value }) => {
+        const ix = x + kx;
+        const iy = y + ky;
+        if (ix >= 0 && ix < gridWidth && iy >= 0 && iy < gridHeight) {
+          sum += grid[iy][ix] * value;
+        }
+      });
+      blurredGrid[y][x] = sum / kernelSum;
+    }
+  }
+
+  return blurredGrid;
+}
+
+function getCoordinatesFromCircles(circles) {
+  return circles._groups[0].map(circle => {
+    const cx = circle.getAttribute('cx');
+    const cy = circle.getAttribute('cy');
+    return { x: parseFloat(cx), y: parseFloat(cy) };
+  });
+}
+
+function initializeTooltips() {
+  let tooltipTriggerList = document.querySelectorAll(
+    '[data-bs-toggle="tooltip"]',
+  );
+  let tooltipList = [...tooltipTriggerList]
+    .filter((tooltipTriggerEl) =>
+      tooltipTriggerEl.getAttribute("data-bs-title"),
+    )
+    .map((tooltipTriggerEl) => new bootstrap.Tooltip(tooltipTriggerEl));
+}
+
+function setupBoundingBoxes() {
+  let bboxes = [];
+  board?.setCentroids.forEach((item, i) => {
+    let id = sanitizeForQuerySelector(item[settings.indexedDB.keyPath]);
+    let cid = `#c${id}`;
+    let tid = `#t${id}`;
 
     let thisBBox = d3.select(tid)._groups[0][0].getBBox();
     let overlap = true;
@@ -471,10 +701,6 @@ async function generateMap() {
       d3.select(tid).data(d3.select(cid).data()[0]);
       d3.select(cid).attr("fill", "#000000").attr("opacity", 1);
     }
-
-    $clusterSelect.append(
-      `<option value="${item?.[settings.indexedDB.keyPath]}">${item[config.labels.title]}</option>`,
-    );
   });
 }
 
@@ -603,7 +829,6 @@ async function init() {
       color: config.colors.default,
     });
     let indexToRemove = parseInt(data.index, 10);
-    console.log(indexToRemove);
     config.regexes = config.regexes.filter(
       (_, index) => index !== indexToRemove,
     );
@@ -613,7 +838,18 @@ async function init() {
 
   $(document).on("change", "#titleSelect", function () {
     config.labels.title = $("#titleSelect option:selected").val();
+
+    if (!board["labels"]) {
+      return;
+    }
+    board["labels"].attr("opacity", 0);
     board?.labels?.text((d) => d[config.labels.title]);
+    board?.circles
+      .attr("data-bs-toggle", "tooltip")
+      .attr("data-bs-title", (d) => d[config.labels.title]);
+
+    initializeTooltips();
+    setupBoundingBoxes();
   });
 
   $(document).on("change", "#descriptionSelect", function () {
@@ -622,7 +858,6 @@ async function init() {
 
   $offcanvasRightElement.addEventListener("hide.bs.offcanvas", (event) => {
     resetState();
-    console.log("hide");
   });
 }
 init();

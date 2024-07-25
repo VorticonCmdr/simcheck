@@ -257,6 +257,57 @@ async function saveData(settings, dataArray, keySet, progressFunction) {
   });
 }
 
+async function addData(settings, dataArray, keySet, progressFunction) {
+  return new Promise(async (resolve, reject) => {
+    let db = await openDatabase(settings, true);
+    settings.version = db.version;
+    db.close();
+
+    db = await openDatabase(settings, false);
+    const transaction = db.transaction([settings.tableName], "readwrite");
+    let store = transaction.objectStore(settings.tableName);
+
+    transaction.oncomplete = () => {
+      progressFunction({
+        type: "storing",
+        status: "storing",
+        name: "complete",
+        finished: true,
+      });
+      resolve();
+    };
+
+    transaction.onerror = (event) => {
+      reject(event.target.error);
+    };
+
+    let dataArrayLength = 0;
+    dataArray
+      .filter((item) => {
+        if (!keySet.has(item[settings.keyPath])) {
+          dataArrayLength++;
+          return true;
+        }
+      })
+      .forEach((data, index) => {
+        const request = store.add(data);
+        request.onerror = (event) => {
+          //errorMessage(`Error saving data: ${event.target.error}`);
+          console.log(`Error saving data: ${event.target.error}`);
+        };
+        request.onsuccess = (event) => {
+          progressFunction({
+            type: "storing",
+            status: "storing",
+            name: settings.tableName,
+            progress: ((index + 1) / dataArrayLength) * 100,
+          });
+        };
+      });
+    db.close();
+  });
+}
+
 async function getFilteredData(settings, keyPathSet) {
   try {
     const db = await openDatabase(settings, true);
@@ -337,6 +388,7 @@ export {
   deleteObjectStore,
   getAllKeys,
   saveData,
+  addData,
   getAllData,
   getFilteredData,
 };

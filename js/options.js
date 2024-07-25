@@ -1,9 +1,14 @@
 import { settings, setSettings, initializeSettings } from "/js/settings.js";
 import {
+  getAllData,
   getObjectStoreNamesAndSizes,
   deleteObjectStore,
+  firstEntry,
 } from "/js/indexeddb.js";
 import { setProgressbar } from "/js/progress.js";
+import { handleDownload } from "/js/download.js";
+
+import "/js/filedrop.js";
 
 import { PortConnector } from "/js/messages.js";
 const simcheckPort = new PortConnector({
@@ -166,13 +171,40 @@ async function generateObjectStoresTable() {
         classes = "table-primary";
       }
       return `<tr data-name="${objectStore.name}" class="${classes}">
-      <td>${objectStore.name}</td>
-      <td class="text-end">${objectStore.size.toLocaleString()}</td>
-      <td class="text-end"><i class="bi bi-trash text-danger"></i></td>
+      <td class="d-flex justify-content-between p-2">
+        <details class="flex-fill">
+          <summary>${objectStore.name}</summary>
+          <ul id="${sanitizeForQuerySelector(objectStore.name)}List" class="list-group list-group-flush"></ul>
+        </details>
+        <div class="">${objectStore.size.toLocaleString()}</div>
+        <div class="w-25 text-end"><i class="bi bi-database-down text-primary me-2"></i><i class="bi bi-trash text-danger"></i></div>
+      </td>
     </tr>`;
     })
     .join("\n");
   $("#objectStores").html(html);
+
+  objectStoreNamesAndSizes.forEach(async (objectStore, i) => {
+    let entry = await firstEntry(settings.indexedDB.databaseName, objectStore.name);
+    if (!entry.embeddings) {
+      return;
+    }
+    let html = Object.entries(entry.embeddings)
+      .map(([modelName, value]) => {
+        return `<li class="list-group-item bg-transparent d-flex justify-content-between p-2"><div>${modelName}</div><div>${value?.length} dims</div></li>`;
+      }).join("\n");
+    $(`#${sanitizeForQuerySelector(objectStore.name)}List`).html(html);
+  });
+}
+
+function sanitizeForQuerySelector(url) {
+  // Define a regex to match valid characters for querySelector
+  let validChars = /[a-zA-Z0-9_-]/g;
+
+  // Filter the characters
+  let sanitizedString = url.match(validChars).join("");
+
+  return sanitizedString;
 }
 
 async function init() {
@@ -254,6 +286,17 @@ async function init() {
     document.getElementById("deleteObjectStoreQuestion"),
     {},
   );
+  $(document).on("click", "#objectStoresTable .bi-database-down", async function () {
+    let trElement = $(this).closest("tr");
+    let objectStoreName = trElement.data("name");
+    let objectStoreData = await getAllData({
+      databaseName: settings.indexedDB.databaseName,
+      tableName: objectStoreName,
+      keyPath: settings.indexedDB.keyPath,
+      version: settings.indexedDB.version,
+    });
+    await handleDownload(objectStoreData, objectStoreName);
+  });
   $(document).on("click", "#objectStoresTable .bi-trash", async function () {
     let trElement = $(this).closest("tr");
     let dataObjectStoreName = trElement.data("name");
