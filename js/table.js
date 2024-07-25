@@ -2,6 +2,7 @@ let config = {
   fields: {
     disabled: new Set([
       "embeddings",
+      "clicked",
       "order",
       "coordinates",
       "embeddings2",

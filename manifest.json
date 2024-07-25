@@ -4,6 +4,7 @@
   "description": "a chrome extension to generate, compare and visualize vector embeddings",
   "version": "0.0.1",
   "permissions": [
+    "background",
     "storage",
     "unlimitedStorage",
     "alarms",

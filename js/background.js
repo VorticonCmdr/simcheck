@@ -6,6 +6,8 @@ chrome.action.onClicked.addListener((tab) => {
   );
 });
 
+import { processClusterData } from "/js/clustering.js";
+
 chrome.alarms.create("keepAlive", { periodInMinutes: 0.5 }); // Trigger every 30 seconds
 
 function sendMessageAsync(message) {
@@ -54,7 +56,6 @@ async function init() {
       // a progress callback to the pipeline so that we can
       // track model (down)loading.
       x["type"] = "loading";
-      //sendMessage(x);
       sendMessage(x);
     },
     "feature-extraction",
@@ -221,7 +222,6 @@ async function createEmbeddings(data) {
 async function processChunk(
   chunk,
   selectedFields,
-  //embeddingsExtractor,
   totalProcessed,
   docsLength,
   totalStartTime,
@@ -667,15 +667,8 @@ chrome.runtime.onConnect.addListener(function (port) {
     simcheckPromiseResolve();
     port.onMessage.addListener(async function (message) {
       switch (message.action) {
-        case "findCentralItems":
-          let dataset = await getAllData(message.settings.indexedDB);
-          let centralItemsResult = findCentralItems(dataset, settings, cos_sim);
-          let cres = await searchDataset(
-            centralItemsResult.filter((d) => d.central),
-            message.settings,
-            message.query,
-          );
-          console.log(cres);
+        case "processClusterData":
+          let clusters = await processClusterData(message.data, sendMessage);
           break;
         case "createNotification":
           createNotification(message.text);

@@ -10,45 +10,31 @@ const invertedCosineSimilarity = (vecA, vecB) => {
 
 import { generateTable } from "/js/table.js";
 
-import { PortConnector } from "/js/messages.js";
-const simcheckPort = new PortConnector({
-  customMessageHandler: messageHandler,
-});
-async function messageHandler(message) {
-  if (message.old) {
-    switch (message.type) {
-      case "loading":
-        setProgressbar(message);
-        simcheckPort.postMessage({ action: "pong" });
-        break;
-      case "storing":
-        setProgressbar(message);
-        break;
-    }
-    return;
-  }
+const hclustWorker = new Worker("/js/hclust-worker.js");
+
+// Function to handle messages from the web worker
+hclustWorker.onmessage = function (e) {
+  const message = e.data;
   switch (message.type) {
-    case "loading":
-      simcheckPort.postMessage({ action: "pong" });
-      setProgressbar(message);
+    case "clusterData":
+      processCluster(message.result);
       break;
-  }
-}
-chrome.storage.local.get("lastMessage", (result) => {
-  if (!chrome.runtime.lastError) {
-    if (result.lastMessage !== undefined) {
-      messageHandler(result.lastMessage);
-      chrome.storage.local.remove("lastMessage", () => {
-        if (chrome.runtime.lastError) {
-          console.error(
-            "Error deleting message:",
-            chrome.runtime.lastError.message,
-          );
-        }
+    case "progress":
+      setProgressbar({
+        status: "agglomerative hierarchical clustering",
+        name: message.name,
+        progress: message.progress * 100,
       });
-    }
+      break;
+    default:
+      console.log(message);
   }
-});
+};
+
+// Function to handle errors from the web worker
+hclustWorker.onerror = function (error) {
+  console.error("Error in worker:", error);
+};
 
 let sortable;
 let objectStoresMeta = {};
@@ -78,7 +64,13 @@ function clusterEmbeddings(objectStores) {
     };
   });
   if (config.hclust.isEnabled) {
-    simcheckPort.postMessage({ action: "processClusterData", data });
+    console.log(data);
+    /*
+    hclustWorker.postMessage({
+      method: "clusterData",
+      data: data,
+    });
+    */
   } else {
     processCluster({
       request: data,
