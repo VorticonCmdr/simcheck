@@ -2,6 +2,8 @@ import { settings, initializeSettings } from "/js/settings.js";
 import { saveData, getAllData } from "/js/indexeddb.js";
 import { setProgressbar } from "/js/progress.js";
 
+import { DBSCAN } from "/libs/dbscan.js";
+
 import "/libs/umap-js.min.js";
 import { cos_sim } from "/libs/transformers.min.js";
 const invertedCosineSimilarity = (vecA, vecB) => {
@@ -10,45 +12,31 @@ const invertedCosineSimilarity = (vecA, vecB) => {
 
 import { generateTable } from "/js/table.js";
 
-import { PortConnector } from "/js/messages.js";
-const simcheckPort = new PortConnector({
-  customMessageHandler: messageHandler,
-});
-async function messageHandler(message) {
-  if (message.old) {
-    switch (message.type) {
-      case "loading":
-        setProgressbar(message);
-        simcheckPort.postMessage({ action: "pong" });
-        break;
-      case "storing":
-        setProgressbar(message);
-        break;
-    }
-    return;
-  }
+const hclustWorker = new Worker("/js/hclust-worker.js");
+
+// Function to handle messages from the web worker
+hclustWorker.onmessage = function (e) {
+  const message = e.data;
   switch (message.type) {
-    case "loading":
-      simcheckPort.postMessage({ action: "pong" });
-      setProgressbar(message);
+    case "clusterData":
+      processCluster(message.result);
       break;
-  }
-}
-chrome.storage.local.get("lastMessage", (result) => {
-  if (!chrome.runtime.lastError) {
-    if (result.lastMessage !== undefined) {
-      messageHandler(result.lastMessage);
-      chrome.storage.local.remove("lastMessage", () => {
-        if (chrome.runtime.lastError) {
-          console.error(
-            "Error deleting message:",
-            chrome.runtime.lastError.message,
-          );
-        }
+    case "progress":
+      setProgressbar({
+        status: "agglomerative hierarchical clustering",
+        name: message.name,
+        progress: message.progress * 100,
       });
-    }
+      break;
+    default:
+      console.log(message);
   }
-});
+};
+
+// Function to handle errors from the web worker
+hclustWorker.onerror = function (error) {
+  console.error("Error in worker:", error);
+};
 
 let sortable;
 let objectStoresMeta = {};
@@ -66,6 +54,10 @@ let config = {
   hclust: {
     isEnabled: true,
   },
+  dbscan: {
+    minPts: 3,
+    eps: 0.3,
+  },
 };
 
 function clusterEmbeddings(objectStores) {
@@ -78,7 +70,10 @@ function clusterEmbeddings(objectStores) {
     };
   });
   if (config.hclust.isEnabled) {
-    simcheckPort.postMessage({ action: "processClusterData", data });
+    hclustWorker.postMessage({
+      method: "clusterData",
+      data: data,
+    });
   } else {
     processCluster({
       request: data,
@@ -102,6 +97,8 @@ async function loopTables(data) {
 
   return resultData;
 }
+
+const euclideanDistance2D = (x1, y1, x2, y2) => Math.hypot(x2 - x1, y2 - y1);
 
 async function processCluster(response) {
   let tableData = await loopTables(response.request);
@@ -130,6 +127,43 @@ async function processCluster(response) {
       tableData[index]["coordinates"] = coordinates;
     });
   }
+
+  let dbscan = new DBSCAN();
+  const t0 = performance.now();
+  let clusters = dbscan.run(
+    reducedDimension.map((arr) => {
+      return {
+        x: arr[0],
+        y: arr[1],
+      };
+    }),
+    config.dbscan.eps,
+    config.dbscan.minPts,
+  );
+  const t1 = performance.now();
+  console.log(`Call to doSomething took ${t1 - t0} milliseconds.`);
+
+  let clusterCenters = dbscan._getClusterCenters() || [];
+
+  dbscan._assigned.forEach((cluster, index) => {
+    tableData[index]["dbscanCluster"] = cluster;
+  });
+
+  clusterCenters.forEach((clusterCenter) => {
+    let minDist = 0xffff;
+    clusterCenter.parts.forEach((tableDataIndex) => {
+      let dist = euclideanDistance2D(
+        clusterCenter.x,
+        clusterCenter.y,
+        tableData[tableDataIndex]["coordinates"][0],
+        tableData[tableDataIndex]["coordinates"][1],
+      );
+      if (dist < minDist) {
+        minDist = dist;
+        tableData[tableDataIndex]["center"] = true;
+      }
+    });
+  });
 
   setProgressbar({
     status: "generating table",

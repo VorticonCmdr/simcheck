@@ -10,31 +10,45 @@ const invertedCosineSimilarity = (vecA, vecB) => {
 
 import { generateTable } from "/js/table.js";
 
-const hclustWorker = new Worker("/js/hclust-worker.js");
-
-// Function to handle messages from the web worker
-hclustWorker.onmessage = function (e) {
-  const message = e.data;
-  switch (message.type) {
-    case "clusterData":
-      processCluster(message.result);
-      break;
-    case "progress":
-      setProgressbar({
-        status: "agglomerative hierarchical clustering",
-        name: message.name,
-        progress: message.progress * 100,
-      });
-      break;
-    default:
-      console.log(message);
+import { PortConnector } from "/js/messages.js";
+const simcheckPort = new PortConnector({
+  customMessageHandler: messageHandler,
+});
+async function messageHandler(message) {
+  if (message.old) {
+    switch (message.type) {
+      case "loading":
+        setProgressbar(message);
+        simcheckPort.postMessage({ action: "pong" });
+        break;
+      case "storing":
+        setProgressbar(message);
+        break;
+    }
+    return;
   }
-};
-
-// Function to handle errors from the web worker
-hclustWorker.onerror = function (error) {
-  console.error("Error in worker:", error);
-};
+  switch (message.type) {
+    case "loading":
+      simcheckPort.postMessage({ action: "pong" });
+      setProgressbar(message);
+      break;
+  }
+}
+chrome.storage.local.get("lastMessage", (result) => {
+  if (!chrome.runtime.lastError) {
+    if (result.lastMessage !== undefined) {
+      messageHandler(result.lastMessage);
+      chrome.storage.local.remove("lastMessage", () => {
+        if (chrome.runtime.lastError) {
+          console.error(
+            "Error deleting message:",
+            chrome.runtime.lastError.message,
+          );
+        }
+      });
+    }
+  }
+});
 
 let sortable;
 let objectStoresMeta = {};
@@ -64,13 +78,7 @@ function clusterEmbeddings(objectStores) {
     };
   });
   if (config.hclust.isEnabled) {
-    console.log(data);
-    /*
-    hclustWorker.postMessage({
-      method: "clusterData",
-      data: data,
-    });
-    */
+    simcheckPort.postMessage({ action: "processClusterData", data });
   } else {
     processCluster({
       request: data,

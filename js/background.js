@@ -407,7 +407,6 @@ async function searchDataOpenAi(text) {
           const similarity = cos_sim(vectorValue, queryVector);
           doc["score"] = parseFloat(similarity.toPrecision(2));
           delete doc["embeddings"];
-          //scoreList.push(doc);
           topK.add(doc);
         }
         cursor.continue();
@@ -446,26 +445,6 @@ function compareEmbeddings(obj1, obj2, modelName) {
   let result = mergeObjects(obj1, obj2, "2");
 
   return [result];
-}
-
-async function searchDataset(dataset, settings, query) {
-  let embedding = await embeddingsExtractor(query, {
-    pooling: "cls",
-  });
-  const queryVector = embedding.data;
-  const queryVectorLength = queryVector.length;
-  const topK = new TopK(5);
-
-  dataset.forEach((doc) => {
-    const vectorValue = doc["embeddings"][settings.pipeline.model];
-    if (vectorValue.length == queryVectorLength) {
-      const similarity = cos_sim(vectorValue, queryVector);
-      doc["score"] = parseFloat(similarity.toPrecision(2));
-      topK.add(doc);
-    }
-  });
-
-  return topK.getTopK();
 }
 
 async function searchDataHF(message) {
