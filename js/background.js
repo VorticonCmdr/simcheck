@@ -6,6 +6,8 @@ chrome.action.onClicked.addListener((tab) => {
   );
 });
 
+import { HNSW } from "/libs/hnsw.js";
+
 import { processClusterData } from "/js/clustering.js";
 
 chrome.alarms.create("keepAlive", { periodInMinutes: 0.5 }); // Trigger every 30 seconds
@@ -271,8 +273,8 @@ async function processChunk(
   return await Promise.all(promises);
 }
 
-async function getEmbeddingsBatch(texts) {
-  const response = await fetch("https://api.openai.com/v1/embeddings", {
+async function getEmbeddingsBatch(texts, batchIndex, totalBatches) {
+  return fetch("https://api.openai.com/v1/embeddings", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -282,20 +284,60 @@ async function getEmbeddingsBatch(texts) {
       model: settings.pipeline.model.replace("openai/", ""),
       input: texts,
     }),
-  });
+  })
+    .then((response) => {
+      if (!response.ok) {
+        sendMessage({
+          status: 500,
+          statusText: "error calling the openAI embeddings api",
+          error: response.statusText,
+        });
+        return [];
+      }
+      const reader = response.body.getReader();
+      const contentLength = +response.headers.get("Content-Length");
+      let receivedLength = 0;
+      let chunks = [];
 
-  if (!response.ok) {
-    sendMessage({
-      status: 500,
-      statusText: "error calling the openAI embeddings api",
-      error: response.statusText,
+      function read() {
+        return reader.read().then(({ done, value }) => {
+          if (done) {
+            const chunksAll = new Uint8Array(receivedLength);
+            let position = 0;
+            for (let chunk of chunks) {
+              chunksAll.set(chunk, position);
+              position += chunk.length;
+            }
+            const data = new TextDecoder("utf-8").decode(chunksAll);
+            return JSON.parse(data);
+          }
+          chunks.push(value);
+          receivedLength += value.length;
+
+          const progress =
+            ((batchIndex + receivedLength / contentLength) / totalBatches) *
+            100;
+          sendMessage({
+            type: "loading",
+            status: "extracting embeddings",
+            name: settings.pipeline.model,
+            progress: progress,
+          });
+
+          return read();
+        });
+      }
+
+      return read();
+    })
+    .catch((error) => {
+      sendMessage({
+        status: 500,
+        statusText: "error calling the openAI embeddings api",
+        error: error.message,
+      });
+      return [];
     });
-    return [];
-    //throw new Error(`Error: ${response.statusText}`);
-  }
-
-  const data = await response.json();
-  return data;
 }
 
 async function createOpenAiEmbeddings(data) {
@@ -319,7 +361,18 @@ async function createOpenAiEmbeddings(data) {
 
   for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
     const batch = batches[batchIndex];
-    const embeddingsResponse = await getEmbeddingsBatch(batch);
+    const progress = ((batchIndex + 1) / batches.length) * 100;
+    sendMessage({
+      type: "loading",
+      status: "extracting embeddings",
+      name: settings.pipeline.model,
+      progress: progress,
+    });
+    const embeddingsResponse = await getEmbeddingsBatch(
+      batch,
+      batchIndex,
+      batches.length,
+    );
     for (
       let embeddingsResponseIndex = 0;
       embeddingsResponseIndex < embeddingsResponse.data.length;
@@ -492,6 +545,43 @@ async function searchDataHF(message) {
   });
 }
 
+let hnsw = null;
+async function generateHNSW(message) {
+  let tableData = await getAllData(message.indexedDB);
+  console.log(message);
+
+  let data = tableData.map((d) => {
+    return {
+      id: d[message.indexedDB.keyPath],
+      vector: d.embeddings[message.pipeline.model],
+    };
+  });
+  console.log(data[0]);
+
+  try {
+    hnsw = new HNSW(400, 64, data[0].vector.length, "cosine");
+    await hnsw.buildIndex(data);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function searchHNSW(message) {
+  let embedding = await embeddingsExtractor(message.query, {
+    pooling: "cls",
+  });
+  const t0 = performance.now();
+  const queryVector = embedding.data;
+
+  // Search for nearest neighbors
+  const results = hnsw.searchKNN(queryVector, 10);
+  const t1 = performance.now();
+  console.log(`Call to doSomething took ${t1 - t0} milliseconds.`);
+
+  return results;
+}
+
 async function getNumberOfTokens(text) {
   if (settings.pipeline.model.startsWith("openai")) {
     return "?";
@@ -510,6 +600,7 @@ async function compareArrays(array1, array2, key) {
   let pos1 = 1;
 
   for (let obj1 of array1) {
+    let res = obj1;
     let maxSimilarity = -1;
     let bestMatch = null;
 
@@ -522,8 +613,12 @@ async function compareArrays(array1, array2, key) {
     });
     pos1++;
 
+    const vec1 = obj1?.["embeddings"]?.[key];
+    const results = hnsw.searchKNN(vec1, 1);
+    bestMatch = results[0];
+    res["score"] = parseFloat(bestMatch["score"].toFixed(3));
+    /*
     for (let obj2 of array2) {
-      const vec1 = obj1?.["embeddings"]?.[key];
       const vec2 = obj2?.["embeddings"]?.[key];
       if (!vec1?.length || !vec2?.length) {
         continue;
@@ -535,12 +630,11 @@ async function compareArrays(array1, array2, key) {
         bestMatch = obj2;
       }
     }
+    */
     // Yield control back to the event loop
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    let res = obj1;
-
-    res["score"] = parseFloat(maxSimilarity.toFixed(3));
+    //res["score"] = parseFloat(maxSimilarity.toFixed(3));
     Object.keys(bestMatch).forEach((key) => {
       if (key == "embeddings") {
         return;
@@ -646,6 +740,18 @@ chrome.runtime.onConnect.addListener(function (port) {
     simcheckPromiseResolve();
     port.onMessage.addListener(async function (message) {
       switch (message.action) {
+        case "generateHNSW":
+          let hnswResult = await generateHNSW(message);
+          sendMessage({
+            type: "loading",
+            model: "hnsw",
+            status: "ready",
+          });
+          break;
+        case "searchHNSW":
+          let hnswSerpData = await searchHNSW(message);
+          console.log(hnswSerpData);
+          break;
         case "processClusterData":
           let clusters = await processClusterData(message.data, sendMessage);
           break;

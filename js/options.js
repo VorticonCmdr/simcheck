@@ -151,8 +151,8 @@ async function generateModelsTable() {
       <td>${linkHuggingface(model.name)}</td>
       <td>${model.quantized}</td>
       <td class="text-end">${formatBytes(model.size)}</td>
-      <td class="text-center"><i class="bi bi-plugin text-primary me-1"></i></td>
-      <td class="text-center"><i class="bi bi-trash text-danger"></i></td>
+      <td class="text-center"><i class="bi bi-plugin text-primary me-1" title="select"></i></td>
+      <td class="text-center"><i class="bi bi-trash text-danger" title="delete"></i></td>
     </tr>`;
     })
     .join("\n");
@@ -177,7 +177,7 @@ async function generateObjectStoresTable() {
           <ul id="${sanitizeForQuerySelector(objectStore.name)}List" class="list-group list-group-flush"></ul>
         </details>
         <div class="">${objectStore.size.toLocaleString()}</div>
-        <div class="w-25 text-end"><i class="bi bi-database-down text-primary me-2"></i><i class="bi bi-trash text-danger"></i></div>
+        <div class="w-25 text-end"><i class="bi bi-plugin text-primary me-2" title="select"></i><i class="bi bi-database-down text-success me-2" title="download"></i><i class="bi bi-trash text-danger" title="delete"></i></div>
       </td>
     </tr>`;
     })
@@ -185,14 +185,18 @@ async function generateObjectStoresTable() {
   $("#objectStores").html(html);
 
   objectStoreNamesAndSizes.forEach(async (objectStore, i) => {
-    let entry = await firstEntry(settings.indexedDB.databaseName, objectStore.name);
+    let entry = await firstEntry(
+      settings.indexedDB.databaseName,
+      objectStore.name,
+    );
     if (!entry.embeddings) {
       return;
     }
     let html = Object.entries(entry.embeddings)
       .map(([modelName, value]) => {
         return `<li class="list-group-item bg-transparent d-flex justify-content-between p-2"><div>${modelName}</div><div>${value?.length} dims</div></li>`;
-      }).join("\n");
+      })
+      .join("\n");
     $(`#${sanitizeForQuerySelector(objectStore.name)}List`).html(html);
   });
 }
@@ -286,17 +290,28 @@ async function init() {
     document.getElementById("deleteObjectStoreQuestion"),
     {},
   );
-  $(document).on("click", "#objectStoresTable .bi-database-down", async function () {
+  $(document).on("click", "#objectStoresTable .bi-plugin", async function () {
     let trElement = $(this).closest("tr");
     let objectStoreName = trElement.data("name");
-    let objectStoreData = await getAllData({
-      databaseName: settings.indexedDB.databaseName,
-      tableName: objectStoreName,
-      keyPath: settings.indexedDB.keyPath,
-      version: settings.indexedDB.version,
-    });
-    await handleDownload(objectStoreData, objectStoreName);
+    settings.indexedDB.tableName = objectStoreName;
+    await setSettings(settings);
+    location.reload();
   });
+  $(document).on(
+    "click",
+    "#objectStoresTable .bi-database-down",
+    async function () {
+      let trElement = $(this).closest("tr");
+      let objectStoreName = trElement.data("name");
+      let objectStoreData = await getAllData({
+        databaseName: settings.indexedDB.databaseName,
+        tableName: objectStoreName,
+        keyPath: settings.indexedDB.keyPath,
+        version: settings.indexedDB.version,
+      });
+      await handleDownload(objectStoreData, objectStoreName);
+    },
+  );
   $(document).on("click", "#objectStoresTable .bi-trash", async function () {
     let trElement = $(this).closest("tr");
     let dataObjectStoreName = trElement.data("name");
@@ -313,7 +328,6 @@ async function init() {
       version: settings.indexedDB.version,
     });
     await setSettings();
-    console.log(settings);
     deleteObjectStoreQuestionModal.hide();
     location.reload();
   });

@@ -134,7 +134,6 @@ async function loadData(objectStoreName) {
 }
 
 function buildFlatbush() {
-  const t0 = performance.now();
   board.flatbushIndex = new Flatbush(board.mapsData.length);
   board.mapsData.forEach((item) => {
     board.flatbushIndex.add(
@@ -143,8 +142,6 @@ function buildFlatbush() {
     );
   });
   board.flatbushIndex.finish();
-  const t1 = performance.now();
-  console.log(`flatbushIndex took ${t1 - t0} milliseconds.`);
 }
 
 // Throttle function implementation
@@ -217,7 +214,7 @@ function handleZoom(event) {
       event.transform.invertY(board.height),
     )
     .map((i) => board.mapsData[i]);
-  console.log(event.transform.k);
+  //console.log(event.transform.k);
 }
 
 function resetZoom() {
@@ -418,7 +415,6 @@ function showCluster(clickedCircle) {
 
 function circleClick(pointerEvent, clickedCircle) {
   clearTimeout(board.zoomTimeout);
-  console.log("circleClick");
   centerNode(pointerEvent.target.id);
   updateCircles(clickedCircle.dbscanCluster);
   showCluster(clickedCircle);
@@ -582,7 +578,6 @@ async function generateMap() {
   initializeTooltips();
 
   board.svg.on("click", (event) => {
-    console.log("svg click");
     clearTimeout(board.zoomTimeout);
     if (event.target.tagName !== "circle") {
       resetState();
@@ -719,29 +714,60 @@ function initializeTooltips() {
 }
 
 function setupBoundingBoxes() {
+  let centerMapsData = board.mapsData.filter((d) => d.center);
+  if (!centerMapsData.length) {
+    return;
+  }
   let bboxes = [];
-  board.mapsData
-    .filter((d) => d.center)
-    .forEach((item, i) => {
-      let id = sanitizeForQuerySelector(item[settings.indexedDB.keyPath]);
-      let cid = `#c${id}`;
-      let tid = `#t${id}`;
+  const index = new Flatbush(centerMapsData.length); // Initialize Flatbush with the number of items
 
-      let thisBBox = d3.select(tid)._groups[0][0]?.getBBox();
-      if (!thisBBox) {
-        return;
+  // Add bounding boxes to the index
+  centerMapsData.forEach((item, i) => {
+    let id = sanitizeForQuerySelector(item[settings.indexedDB.keyPath]);
+    let tid = `#t${id}`;
+    let thisBBox = d3.select(tid)._groups[0][0]?.getBBox();
+    if (thisBBox) {
+      index.add(
+        thisBBox.x,
+        thisBBox.y,
+        thisBBox.x + thisBBox.width,
+        thisBBox.y + thisBBox.height,
+      );
+      bboxes.push({ id, bbox: thisBBox });
+    } else {
+      console.log(thisBBox);
+    }
+  });
+
+  index.finish(); // Perform the indexing
+
+  let visibleBBoxes = new Set();
+  // Check for overlaps and set attributes
+  bboxes.forEach(({ id, bbox }, i) => {
+    let tid = `#t${id}`;
+    let cid = `#c${id}`;
+    let candidates = index.search(
+      bbox.x,
+      bbox.y,
+      bbox.x + bbox.width,
+      bbox.y + bbox.height,
+    );
+
+    let overlap = false;
+    for (const id of candidates) {
+      if (visibleBBoxes.has(id)) {
+        overlap = true;
+        break; // Exit the loop early since we found an overlap
       }
-      let overlap = true;
-      bboxes.forEach((otherBBox) => {
-        overlap &= getOverlapFromTwoExtents(thisBBox, otherBBox);
-      });
-      if (overlap) {
-        bboxes.push(thisBBox);
-        d3.select(tid).attr("opacity", 1);
-        d3.select(tid).data(d3.select(cid).data()[0]);
-        d3.select(cid).attr("fill", "#000000").attr("opacity", 1);
-      }
-    });
+    }
+
+    if (!overlap) {
+      visibleBBoxes.add(i);
+      d3.select(tid).attr("opacity", 1);
+      d3.select(tid).data(d3.select(cid).data()[0]);
+      d3.select(cid).attr("fill", "#000000").attr("opacity", 1);
+    }
+  });
 }
 
 function changeCluster(e) {

@@ -1,6 +1,7 @@
 let config = {
   fields: {
     disabled: new Set([
+      "center",
       "embeddings",
       "clicked",
       "order",

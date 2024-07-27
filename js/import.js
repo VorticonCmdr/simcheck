@@ -1,9 +1,11 @@
 import { settings, getSettings, setSettings } from "/js/settings.js";
 import {
-  openDatabase,
   getAllKeys,
+  getObjectStoreNamesAndMeta,
+  getAllData,
   saveData,
   getFilteredData,
+  firstEntry,
 } from "/js/indexeddb.js";
 import { setProgressbar } from "/js/progress.js";
 
@@ -219,95 +221,44 @@ function parseCsvData(textData) {
   $("#idFields").html(idFieldsHtml);
 }
 
+const warningToast = document.getElementById("warningToast");
 async function errorMessage(error) {
+  const warningToastBootstrap =
+    bootstrap.Toast.getOrCreateInstance(warningToast);
   $("#warning-text").text(error);
-  $("#warning").removeClass("d-none");
+  warningToastBootstrap.show();
 }
 
 async function handleIndexedDB() {
-  let db = await openDatabase(settings.indexedDB, true);
-  let objectStoreNames = [...db.objectStoreNames];
-  db.close();
+  let objectStores = await getObjectStoreNamesAndMeta(settings.indexedDB);
 
-  try {
-    let objectStores = Array.from(objectStoreNames);
-    let html = objectStores
-      .map((objectStoreName) => {
-        return `<option value="${objectStoreName}"></option>`;
-      })
-      .join("\n");
-    $("#saveTableList").html(html);
+  let html = objectStores
+    .map((objectStore) => {
+      return `<option value="${objectStore.name}" data-keypath="${objectStore.keyPath}"></option>`;
+    })
+    .join("\n");
+  $("#saveTableList").html(html);
 
-    let tableSelectHtml = objectStores
-      .map((objectStoreName) => {
-        return `<option value="${objectStoreName}" ${settings.indexedDB.tableName == objectStoreName ? "selected" : ""}>${objectStoreName}</option>`;
-      })
-      .join("\n");
-    $("#tableSelect").html(
-      `<option selected disabled>select table to search</option>\n${tableSelectHtml}`,
-    );
+  let tableSelectHtml = objectStores
+    .map((objectStore) => {
+      return `<option value="${objectStore.name}" ${settings.indexedDB.tableName == objectStore.name ? "selected" : ""}>${objectStore.name}</option>`;
+    })
+    .join("\n");
+  $("#tableSelect").html(
+    `<option selected disabled>select table to search</option>\n${tableSelectHtml}`,
+  );
 
-    let compareTableSelectHtml = objectStores
-      .map((objectStoreName) => {
-        return `<option value="${objectStoreName}">${objectStoreName}</option>`;
-      })
-      .join("\n");
-    $("#compareTable1").html(
-      `<option selected disabled>compare this table</option>\n${compareTableSelectHtml}`,
-    );
-    $("#compareTable2").html(
-      `<option selected disabled>with that table</option>\n${compareTableSelectHtml}`,
-    );
-  } catch (error) {
-    errorMessage(error);
-  }
-}
-
-async function getAllData(db, tableName) {
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction([tableName], "readonly");
-    const objectStore = transaction.objectStore(tableName);
-    settings.indexedDB.keyPath = objectStore.keyPath;
-    $("#idFields").html(
-      `<option selected disabled value="${settings.indexedDB.keyPath}">${settings.indexedDB.keyPath}</option>`,
-    );
-    const request = objectStore.openCursor();
-
-    let docs = [];
-    request.onsuccess = (event) => {
-      const cursor = event.target.result;
-
-      function processCursor(cursor) {
-        if (cursor) {
-          docs.push(cursor.value);
-          cursor.continue();
-        } else {
-          if (docs?.length) {
-            row1 = docs[0];
-            let fieldsHtml = Object.keys(row1)
-              .filter((name) => name != "embeddings")
-              .reduce((accumulator, currentValue) => {
-                return `${accumulator}\n<option data-id="${currentValue}" value="${currentValue}">${currentValue}</option>`;
-              }, ``);
-            $embeddingsFields.html(fieldsHtml);
-          }
-          //resolve(event.target.result);
-          resolve(docs);
-        }
-      }
-
-      processCursor(cursor);
-    };
-
-    request.onerror = (event) => {
-      simcheckPort.postMessage({
-        status: 500,
-        statusText: "error getting data",
-        error: event.target.error,
-      });
-      reject(event.target.error);
-    };
-  });
+  let compareTableSelectHtml = objectStores
+    .map((objectStore) => {
+      return `<option value="${objectStore.name}">${objectStore.name}</option>`;
+    })
+    .join("\n");
+  $("#compareTable1").html(
+    `<option selected disabled>compare this table</option>\n${compareTableSelectHtml}`,
+  );
+  $("#compareTable2").html(
+    `<option selected disabled>with that table</option>\n${compareTableSelectHtml}`,
+  );
 }
 
 function processSelectedFields(evt) {
@@ -327,6 +278,14 @@ function processSelectedFields(evt) {
 async function init() {
   await handleIndexedDB();
 
+  $("#generateHNSW").on("click", function () {
+    simcheckPort.postMessage({
+      action: "generateHNSW",
+      indexedDB: settings.indexedDB,
+      pipeline: settings.pipeline,
+    });
+  });
+
   $(document).on("change", "#idFields", function () {
     let value = $(this).val();
     if (!value) {
@@ -335,23 +294,35 @@ async function init() {
     settings.indexedDB.keyPath = value;
   });
 
+  $("#saveTableInput").on("input", async function () {
+    const input = $(this);
+    const listId = input.attr("list");
+    const inputValue = input.val();
+    const option = $(`#${listId} option[value="${inputValue}"]`);
+
+    if (option.length > 0) {
+      let keypath = option.data("keypath");
+      settings.indexedDB.keyPath = keypath;
+      let idFieldsHtml = `<option value="${keypath}">${keypath}</option>`;
+      $("#idFields").html(idFieldsHtml);
+
+      row1 = await firstEntry(settings.indexedDB.databaseName, inputValue);
+
+      let fieldsHtml = Object.keys(row1).reduce((accumulator, currentValue) => {
+        return `${accumulator}\n<option data-id="${currentValue}" value="${currentValue}">${currentValue}</option>`;
+      }, ``);
+      $embeddingsFields.html(fieldsHtml);
+    }
+  });
   $("#saveTableInput").on("change", async function () {
     let name = $(this).val();
     if (!name) {
       return;
     }
-    let db = await openDatabase(settings.indexedDB, true);
-    try {
-      let result = await getAllData(db, name);
-      db.close();
-      result = result.map((item) => {
-        delete item?.embeddings;
-        return item;
-      });
-      generateTable(result);
-    } catch (error) {
-      db.close();
-    }
+
+    settings.indexedDB.tableName = name;
+    let result = await getAllData(settings.indexedDB);
+    generateTable(result);
   });
 
   $generateEmbeddings.text(`start embedding ${settings.pipeline.model}`);
@@ -402,8 +373,8 @@ async function init() {
     if (!query) {
       return;
     }
-    simcheckPort.postMessage({ action: "search", query, settings });
-    //simcheckPort.postMessage({ action: "findCentralItems", settings, query });
+    //simcheckPort.postMessage({ action: "search", query, settings });
+    simcheckPort.postMessage({ action: "searchHNSW", settings, query });
   });
 
   $("#compare").on("click", function () {

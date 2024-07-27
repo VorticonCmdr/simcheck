@@ -58,6 +58,7 @@ const firstEntry = async ({ databaseName = "simcheck" }, objectStoreName) => {
 
       cursorRequest.onsuccess = (event) => {
         const cursor = event.target.result;
+        db.close();
         if (cursor) {
           resolve(cursor.value); // Resolve with the first entry's value
         } else {
@@ -66,6 +67,7 @@ const firstEntry = async ({ databaseName = "simcheck" }, objectStoreName) => {
       };
 
       cursorRequest.onerror = (event) => {
+        db.close();
         reject(event.target.error);
       };
     };
