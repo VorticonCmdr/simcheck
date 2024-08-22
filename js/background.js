@@ -551,10 +551,114 @@ async function searchDataHF(message) {
   });
 }
 
+class SBQ {
+  constructor(vectors) {
+    this.vectors = vectors;
+    this.means = this.calculateMeans(vectors);
+    this.stdevs = this.calculateStdevs(vectors, this.means);
+    this.quantizedBuffers = this.quantizeAllVectorsToBuffer(vectors);
+  }
+
+  // Calculate means for each dimension
+  calculateMeans(vectors) {
+    const numDimensions = vectors[0].vector.length;
+    const means = Array(numDimensions).fill(0);
+    vectors.forEach(({ vector }) => {
+      vector.forEach((value, index) => {
+        means[index] += value;
+      });
+    });
+    return means.map((mean) => mean / vectors.length);
+  }
+
+  // Calculate standard deviations for each dimension
+  calculateStdevs(vectors, means) {
+    const numDimensions = vectors[0].vector.length;
+    const stdevs = Array(numDimensions).fill(0);
+    vectors.forEach(({ vector }) => {
+      vector.forEach((value, index) => {
+        stdevs[index] += (value - means[index]) ** 2;
+      });
+    });
+    return stdevs.map((stdev) => Math.sqrt(stdev / vectors.length));
+  }
+
+  // Quantize a single vector into a bitmap
+  quantize(vector) {
+    return vector.map((value, index) => {
+      const zScore = (value - this.means[index]) / this.stdevs[index];
+      if (zScore > 1) {
+        return 0b11; // Bitmap representation of '11'
+      } else if (zScore > 0) {
+        return 0b01; // Bitmap representation of '01'
+      } else {
+        return 0b00; // Bitmap representation of '00'
+      }
+    });
+  }
+
+  // Quantize all vectors in the dataset and store as ArrayBuffers
+  quantizeAllVectorsToBuffer(vectors) {
+    return vectors.map(({ id, vector }) => ({
+      id,
+      quantizedBuffer: this.vectorToBuffer(this.quantize(vector)),
+    }));
+  }
+
+  // Convert the quantized bitmap array to an ArrayBuffer
+  vectorToBuffer(bitmap) {
+    const buffer = new ArrayBuffer(Math.ceil(bitmap.length / 4)); // Each element is 2 bits, 4 elements per byte
+    const view = new Uint8Array(buffer);
+
+    bitmap.forEach((bits, index) => {
+      const byteIndex = Math.floor(index / 4);
+      const shiftAmount = (3 - (index % 4)) * 2;
+      view[byteIndex] |= bits << shiftAmount;
+    });
+
+    return buffer;
+  }
+
+  // Calculate XOR distance between two ArrayBuffers
+  static xorDistance(buffer1, buffer2) {
+    const view1 = new Uint8Array(buffer1);
+    const view2 = new Uint8Array(buffer2);
+    let distance = 0;
+
+    for (let i = 0; i < view1.length; i++) {
+      let xorResult = view1[i] ^ view2[i];
+      // Count set bits (Hamming weight)
+      while (xorResult) {
+        distance += xorResult & 1;
+        xorResult >>= 1;
+      }
+    }
+
+    return distance;
+  }
+
+  // KNN Search method
+  knnSearch(queryVector, k) {
+    const topK = new TopK(k);
+    const quantizedQueryBuffer = this.vectorToBuffer(
+      this.quantize(queryVector),
+    );
+
+    this.quantizedBuffers.forEach(({ id, quantizedBuffer }) => {
+      const distance = SBQ.xorDistance(quantizedQueryBuffer, quantizedBuffer);
+      topK.add({ id, score: -distance }); // Use negative distance to sort in ascending order
+    });
+
+    return topK.getTopK().slice(0, k);
+  }
+}
+
+let sbq = null;
 let hnsw = null;
 async function generateHNSW(message) {
   let tableData = await getAllData(message.indexedDB);
 
+  console.log(tableData[0]);
   let data = tableData.map((d) => {
     return {
       id: d[message.indexedDB.keyPath],
@@ -563,6 +667,8 @@ async function generateHNSW(message) {
   });
 
   try {
+    sbq = new SBQ(data);
+
     hnsw = new HNSW(400, 64, data[0].vector.length, "cosine");
     await hnsw.buildIndex(data);
     tableData.forEach((row, rowIndex) => {
@@ -670,10 +776,14 @@ async function compareArrays(array1, array2, array2keyPath, key) {
     pos1++;
 
     const vec1 = obj1?.["embeddings"]?.[key];
+
     const results = hnsw.searchKNN(vec1, 1);
+    //const results = sbq.knnSearch(vec1, 1);
+
     if (results.length != 1) {
       continue;
     }
+
     bestMatch = array2Dict[results[0]["id"]];
     res["score"] = parseFloat(results[0]["score"]?.toFixed(3));
     /*
