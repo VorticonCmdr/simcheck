@@ -106,6 +106,24 @@ function openDatabase(settings, readonly) {
   });
 }
 
+function getDBkeypath(databaseName, tableName) {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(databaseName, undefined);
+
+    request.onsuccess = (event) => {
+      const db = event.target.result;
+      let transaction = db.transaction(tableName);
+      let objectStore = transaction.objectStore(tableName);
+      db.close();
+      resolve(objectStore.keyPath);
+    };
+
+    request.onerror = (event) => {
+      reject(event.target.error);
+    };
+  });
+}
+
 function getObjectStoreNamesAndSizes(settings) {
   return openDatabase(settings, true)
     .then((db) => {
@@ -393,4 +411,5 @@ export {
   addData,
   getAllData,
   getFilteredData,
+  getDBkeypath,
 };

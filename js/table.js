@@ -3,10 +3,12 @@ let config = {
     disabled: new Set([
       "center",
       "embeddings",
+      "hnsw",
       "clicked",
       "order",
       "coordinates",
       "embeddings2",
+      "hnsw2",
       "clusterNumber2",
       "order2",
       "coordinates2",

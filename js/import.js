@@ -80,7 +80,7 @@ async function messageHandler(message) {
       setProgressbar(message);
       break;
     case "serp":
-      csvData = message.result;
+      //let serpData = await getSerpData(message.result);
       generateTable(message.result);
       break;
     case "numberOfTokens":
@@ -94,6 +94,19 @@ async function messageHandler(message) {
   }
 }
 
+async function getSerpData(data) {
+  let keyPaths = data.map((d) => d.id);
+  if (!keyPaths.length) {
+    return;
+  }
+  let keyPathSet = new Set(keyPaths);
+  let results = await getFilteredData(settings.indexedDB, keyPathSet);
+  if (!results.length) {
+    return;
+  }
+  return results;
+}
+
 // Function to handle the custom event
 async function handleGetSelections(event) {
   const data = event.detail;
@@ -102,7 +115,6 @@ async function handleGetSelections(event) {
     return;
   }
   let keyPathSet = new Set(keyPaths);
-  //console.log(keyPaths);
   let results = await getFilteredData(settings.indexedDB, keyPathSet);
   if (!results.length || results.length !== 2) {
     return;
@@ -322,6 +334,11 @@ async function init() {
 
     settings.indexedDB.tableName = name;
     let result = await getAllData(settings.indexedDB);
+    simcheckPort.postMessage({
+      action: "restoreHNSW",
+      indexedDB: settings.indexedDB,
+      pipeline: settings.pipeline,
+    });
     generateTable(result);
   });
 
@@ -373,8 +390,8 @@ async function init() {
     if (!query) {
       return;
     }
-    //simcheckPort.postMessage({ action: "search", query, settings });
-    simcheckPort.postMessage({ action: "searchHNSW", settings, query });
+    simcheckPort.postMessage({ action: "search", query, settings });
+    //simcheckPort.postMessage({ action: "searchHNSW", settings, query });
   });
 
   $("#compare").on("click", function () {

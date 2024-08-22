@@ -67,7 +67,13 @@ async function init() {
 }
 init();
 
-import { openDatabase, getAllData, saveData } from "/js/indexeddb.js";
+import {
+  openDatabase,
+  getAllData,
+  saveData,
+  getDBkeypath,
+  getFilteredData,
+} from "/js/indexeddb.js";
 
 function getObjectStoreNames(databaseName) {
   return new Promise((resolve, reject) => {
@@ -548,7 +554,6 @@ async function searchDataHF(message) {
 let hnsw = null;
 async function generateHNSW(message) {
   let tableData = await getAllData(message.indexedDB);
-  console.log(message);
 
   let data = tableData.map((d) => {
     return {
@@ -556,28 +561,74 @@ async function generateHNSW(message) {
       vector: d.embeddings[message.pipeline.model],
     };
   });
-  console.log(data[0]);
 
   try {
     hnsw = new HNSW(400, 64, data[0].vector.length, "cosine");
     await hnsw.buildIndex(data);
+    tableData.forEach((row, rowIndex) => {
+      let hnswNode = hnsw.nodes.get(row[message.indexedDB.keyPath]);
+      hnswNode["M"] = hnsw.M;
+      hnswNode["efConstruction"] = hnsw.efConstruction;
+      hnswNode["levelMax"] = hnsw.levelMax;
+      hnswNode["entryPointId"] = hnsw.entryPointId;
+      delete hnswNode.id;
+      delete hnswNode.vector;
+      if (!hnswNode) {
+        return;
+      }
+      if (!tableData[rowIndex]["hnsw"]) {
+        tableData[rowIndex]["hnsw"] = {};
+      }
+      tableData[rowIndex]["hnsw"][message.pipeline.model] = hnswNode;
+    });
+
+    let keysSet = new Set();
+    let result = await saveData(
+      message.indexedDB,
+      tableData,
+      keysSet,
+      sendMessage,
+    );
+
     return true;
   } catch (e) {
     return false;
   }
 }
 
+function restoreHNSWindex(pipeline, indexedDB, tableData) {
+  hnsw = new HNSW(
+    tableData[0]["hnsw"][pipeline.model].M,
+    tableData[0]["hnsw"][pipeline.model].efConstruction,
+  );
+  hnsw.levelMax = tableData[0]["hnsw"][pipeline.model].levelMax;
+  hnsw.entryPointId = tableData[0]["hnsw"][pipeline.model].entryPointId;
+  hnsw.nodes = new Map(
+    tableData.map((d) => {
+      d["hnsw"][pipeline.model]["vector"] = d["embeddings"][pipeline.model];
+      return [d[indexedDB.keyPath], d["hnsw"][pipeline.model]];
+    }),
+  );
+}
+
+async function restoreHNSW(message) {
+  let tableData = await getAllData(message.indexedDB);
+
+  if (!tableData[0]?.hnsw) {
+    return false;
+  }
+  restoreHNSWindex(message.pipeline, message.indexedDB, tableData);
+  return true;
+}
+
 async function searchHNSW(message) {
   let embedding = await embeddingsExtractor(message.query, {
     pooling: "cls",
   });
-  const t0 = performance.now();
   const queryVector = embedding.data;
 
   // Search for nearest neighbors
   const results = hnsw.searchKNN(queryVector, 10);
-  const t1 = performance.now();
-  console.log(`Call to doSomething took ${t1 - t0} milliseconds.`);
 
   return results;
 }
@@ -594,10 +645,15 @@ async function getNumberOfTokens(text) {
   return input_ids.size;
 }
 
-async function compareArrays(array1, array2, key) {
+async function compareArrays(array1, array2, array2keyPath, key) {
   const result = [];
   let array1Length = array1.length;
   let pos1 = 1;
+
+  let array2Dict = array2.reduce((acc, obj) => {
+    acc[obj[array2keyPath]] = obj;
+    return acc;
+  }, {});
 
   for (let obj1 of array1) {
     let res = obj1;
@@ -615,8 +671,11 @@ async function compareArrays(array1, array2, key) {
 
     const vec1 = obj1?.["embeddings"]?.[key];
     const results = hnsw.searchKNN(vec1, 1);
-    bestMatch = results[0];
-    res["score"] = parseFloat(bestMatch["score"].toFixed(3));
+    if (results.length != 1) {
+      continue;
+    }
+    bestMatch = array2Dict[results[0]["id"]];
+    res["score"] = parseFloat(results[0]["score"]?.toFixed(3));
     /*
     for (let obj2 of array2) {
       const vec2 = obj2?.["embeddings"]?.[key];
@@ -639,6 +698,12 @@ async function compareArrays(array1, array2, key) {
       if (key == "embeddings") {
         return;
       }
+      if (key == "score") {
+        return;
+      }
+      if (key == "hnsw") {
+        return;
+      }
       res[`bestMatch-${key}`] = bestMatch[key];
     });
 
@@ -659,21 +724,35 @@ async function compareStores(message) {
   const array1 = await getAllData({
     databaseName: settings.indexedDB.databaseName,
     tableName: message.store1,
-    keyPath: settings.indexedDB.keyPath,
+    keyPath: await getDBkeypath(
+      settings.indexedDB.databaseName,
+      message.store1,
+    ),
     version: settings.indexedDB.version,
   });
+
+  settings.indexedDB.keyPath = await getDBkeypath(
+    settings.indexedDB.databaseName,
+    message.store2,
+  );
   const array2 = await getAllData({
     databaseName: settings.indexedDB.databaseName,
     tableName: message.store2,
     keyPath: settings.indexedDB.keyPath,
     version: settings.indexedDB.version,
   });
+  restoreHNSWindex(settings.pipeline, settings.indexedDB, array2);
 
   if (!array1?.length || !array2.length) {
     console.log("datastore empty");
     return [];
   }
-  resultData = await compareArrays(array1, array2, settings.pipeline.model);
+  resultData = await compareArrays(
+    array1,
+    array2,
+    settings.indexedDB.keyPath,
+    settings.pipeline.model,
+  );
 
   return resultData;
 }
@@ -740,8 +819,16 @@ chrome.runtime.onConnect.addListener(function (port) {
     simcheckPromiseResolve();
     port.onMessage.addListener(async function (message) {
       switch (message.action) {
+        case "restoreHNSW":
+          let restoreHNSWresult = await restoreHNSW(message);
+          sendMessage({
+            type: "loading",
+            model: "hnsw restore",
+            status: JSON.stringify(restoreHNSWresult),
+          });
+          break;
         case "generateHNSW":
-          let hnswResult = await generateHNSW(message);
+          await generateHNSW(message);
           sendMessage({
             type: "loading",
             model: "hnsw",
@@ -750,7 +837,10 @@ chrome.runtime.onConnect.addListener(function (port) {
           break;
         case "searchHNSW":
           let hnswSerpData = await searchHNSW(message);
-          console.log(hnswSerpData);
+          port.postMessage({
+            type: "serp",
+            result: hnswSerpData,
+          });
           break;
         case "processClusterData":
           let clusters = await processClusterData(message.data, sendMessage);
