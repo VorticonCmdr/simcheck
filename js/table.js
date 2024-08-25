@@ -61,6 +61,16 @@ function buttons() {
         title: "save table data to jsonl",
       },
     },
+    btnHideColumns: {
+      text: "hide all columns",
+      icon: "bi-eye-slash",
+      event: function () {
+        $dataTable.bootstrapTable("hideAllColumns");
+      },
+      attributes: {
+        title: "hides all columns but score",
+      },
+    },
     btnCompare: {
       text: "compare 2 rows",
       icon: "bi-ui-checks",

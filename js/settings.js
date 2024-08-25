@@ -16,6 +16,10 @@ let settings = {
   openai: {
     key: "",
   },
+  hnsw: {
+    M: 400,
+    efConstruction: 64,
+  },
 };
 
 async function setSettings(settings) {

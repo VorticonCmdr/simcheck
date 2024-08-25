@@ -653,12 +653,11 @@ class SBQ {
   }
 }
 
-let sbq = null;
+//let sbq = null;
 let hnsw = null;
 async function generateHNSW(message) {
   let tableData = await getAllData(message.indexedDB);
 
-  console.log(tableData[0]);
   let data = tableData.map((d) => {
     return {
       id: d[message.indexedDB.keyPath],
@@ -667,9 +666,8 @@ async function generateHNSW(message) {
   });
 
   try {
-    sbq = new SBQ(data);
-
-    hnsw = new HNSW(400, 64, data[0].vector.length, "cosine");
+    //sbq = new SBQ(data);
+    hnsw = new HNSW(128, 512, data[0].vector.length, "cosine");
     await hnsw.buildIndex(data);
     tableData.forEach((row, rowIndex) => {
       let hnswNode = hnsw.nodes.get(row[message.indexedDB.keyPath]);
@@ -695,14 +693,21 @@ async function generateHNSW(message) {
       keysSet,
       sendMessage,
     );
-
+    console.log(hnsw);
     return true;
   } catch (e) {
     return false;
   }
 }
 
-function restoreHNSWindex(pipeline, indexedDB, tableData) {
+async function restoreHNSWindex(pipeline, indexedDB, tableData) {
+  if (!tableData[0]?.["hnsw"]?.[pipeline.model]) {
+    await generateHNSW({
+      pipeline: pipeline,
+      indexedDB: indexedDB,
+    });
+    tableData = await getAllData(indexedDB);
+  }
   hnsw = new HNSW(
     tableData[0]["hnsw"][pipeline.model].M,
     tableData[0]["hnsw"][pipeline.model].efConstruction,
@@ -723,7 +728,7 @@ async function restoreHNSW(message) {
   if (!tableData[0]?.hnsw) {
     return false;
   }
-  restoreHNSWindex(message.pipeline, message.indexedDB, tableData);
+  await restoreHNSWindex(message.pipeline, message.indexedDB, tableData);
   return true;
 }
 
@@ -851,7 +856,16 @@ async function compareStores(message) {
     keyPath: settings.indexedDB.keyPath,
     version: settings.indexedDB.version,
   });
-  restoreHNSWindex(settings.pipeline, settings.indexedDB, array2);
+  await restoreHNSWindex(
+    settings.pipeline,
+    {
+      databaseName: settings.indexedDB.databaseName,
+      tableName: message.store2,
+      keyPath: settings.indexedDB.keyPath,
+      version: settings.indexedDB.version,
+    },
+    array2,
+  );
 
   if (!array1?.length || !array2.length) {
     console.log("datastore empty");

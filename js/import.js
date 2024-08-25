@@ -333,13 +333,16 @@ async function init() {
     }
 
     settings.indexedDB.tableName = name;
-    let result = await getAllData(settings.indexedDB);
-    simcheckPort.postMessage({
-      action: "restoreHNSW",
-      indexedDB: settings.indexedDB,
-      pipeline: settings.pipeline,
-    });
-    generateTable(result);
+    let objectStores = await getObjectStoreNamesAndMeta(settings.indexedDB);
+    if (objectStores.some((store) => store.name === name)) {
+      let result = await getAllData(settings.indexedDB);
+      simcheckPort.postMessage({
+        action: "restoreHNSW",
+        indexedDB: settings.indexedDB,
+        pipeline: settings.pipeline,
+      });
+      generateTable(result);
+    }
   });
 
   $generateEmbeddings.text(`start embedding ${settings.pipeline.model}`);

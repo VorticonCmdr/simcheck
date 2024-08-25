@@ -243,10 +243,12 @@ async function saveData(settings, dataArray, keySet, progressFunction) {
         name: "complete",
         finished: true,
       });
+      db.close();
       resolve();
     };
 
     transaction.onerror = (event) => {
+      db.close();
       reject(event.target.error);
     };
 
@@ -273,7 +275,6 @@ async function saveData(settings, dataArray, keySet, progressFunction) {
           });
         };
       });
-    db.close();
   });
 }
 
