@@ -1,6 +1,12 @@
 # simcheck
 a chrome extension to generate, compare and visualize vector embeddings
 
+## download
+[chrome web store](https://chromewebstore.google.com/detail/simcheck/eoefampiceefbaiejeialndangdcbbgb)
+
+## goal
+this is not meant as an production ready product but rather an accessible entrypoint into to using embeddings for other things than RAG only
+
 ## used libraries
 
 ### [transformers.js](https://github.com/xenova/transformers.js)
