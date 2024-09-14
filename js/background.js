@@ -693,7 +693,7 @@ async function generateHNSW(message) {
       keysSet,
       sendMessage,
     );
-    console.log(hnsw);
+    //console.log(hnsw);
     return true;
   } catch (e) {
     return false;
@@ -728,6 +728,10 @@ async function restoreHNSW(message) {
   if (!tableData[0]?.hnsw) {
     return false;
   }
+  if (!tableData[0]?.["hnsw"]?.[message.pipeline.model]) {
+    return false;
+  }
+
   await restoreHNSWindex(message.pipeline, message.indexedDB, tableData);
   return true;
 }

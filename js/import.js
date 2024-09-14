@@ -23,6 +23,7 @@ import {
   generateTable,
   saveDataAsFile,
   convertTypedArrays,
+  getTableData,
 } from "/js/table.js";
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -141,8 +142,10 @@ async function handleGetSelections(event) {
   });
 }
 function handleSaveCSV(event) {
+  csvData = getTableData();
   let csv = Papa.unparse(csvData);
-  saveDataAsFile("data.csv", "text/csv", csv);
+  let filename = `${settings.indexedDB.tableName || "data"}.csv`;
+  saveDataAsFile(filename, "text/csv", csv);
 }
 function arrayToJsonl(array) {
   return array.reduce((jsonl, item) => {
@@ -150,9 +153,11 @@ function arrayToJsonl(array) {
   }, "");
 }
 function handleSaveJSONL(event) {
+  csvData = getTableData();
   const convertedDataArray = convertTypedArrays(csvData);
   const jsonlString = arrayToJsonl(convertedDataArray);
-  saveDataAsFile("data.jsonl", "text/jsonl", jsonlString);
+  let filename = `${settings.indexedDB.tableName || "data"}.jsonl`;
+  saveDataAsFile(filename, "text/jsonl", jsonlString);
 }
 // Listen for the custom event
 window.addEventListener("getSelections", handleGetSelections);
@@ -336,11 +341,20 @@ async function init() {
     let objectStores = await getObjectStoreNamesAndMeta(settings.indexedDB);
     if (objectStores.some((store) => store.name === name)) {
       let result = await getAllData(settings.indexedDB);
-      simcheckPort.postMessage({
-        action: "restoreHNSW",
-        indexedDB: settings.indexedDB,
-        pipeline: settings.pipeline,
-      });
+      if (result[0]?.hnsw?.[settings.pipeline.model]) {
+        simcheckPort.postMessage({
+          action: "restoreHNSW",
+          indexedDB: settings.indexedDB,
+          pipeline: settings.pipeline,
+        });
+        $("#generateHNSW")
+          .removeClass("btn-primary")
+          .addClass("btn-outline-success");
+      } else {
+        $("#generateHNSW")
+          .removeClass("btn-outline-success")
+          .addClass("btn-primary");
+      }
       generateTable(result);
     }
   });

@@ -95,6 +95,20 @@ function isNumber(value) {
   return !isNaN(value) && typeof value === "number";
 }
 
+function getTableData() {
+  const removeAttributes = (arr, attrsToRemove) => {
+    return arr.map((obj) => {
+      const newObj = { ...obj };
+      attrsToRemove.forEach((attr) => delete newObj[attr]);
+      return newObj;
+    });
+  };
+
+  let tableData = $dataTable.bootstrapTable("getData");
+
+  return removeAttributes(tableData, ["hnsw", "embeddings", "state"]);
+}
+
 async function generateTable(dataArray) {
   if (dataArray.length == 0) {
     return;
@@ -141,6 +155,15 @@ function convertTypedArrays(obj) {
   }
 }
 
+function sanitizeFilename(input) {
+  // Replace any invalid characters for Windows or macOS with an underscore
+  return input
+    .replace(/[\/\\?%*:|"<>]/g, "_") // Windows forbidden characters
+    .replace(/[\0-\x1F\x80-\x9F]/g, "_") // Control characters
+    .replace(/^\.+$/, "_") // Avoid names that are just dots
+    .trim(); // Remove any leading or trailing spaces
+}
+
 function saveDataAsFile(filename, type, data) {
   const blob = new Blob([data], { type: type });
   const url = URL.createObjectURL(blob);
@@ -148,14 +171,12 @@ function saveDataAsFile(filename, type, data) {
   chrome.downloads.download(
     {
       url: url,
-      filename: filename,
+      filename: sanitizeFilename(filename),
       saveAs: true,
     },
     function (downloadId) {
       if (chrome.runtime.lastError) {
         console.error(`Error: ${chrome.runtime.lastError}`);
-      } else {
-        console.log(`Download started with ID: ${downloadId}`);
       }
       // Revoke the object URL after the download starts
       setTimeout(() => URL.revokeObjectURL(url), 10000);
@@ -178,4 +199,10 @@ function stashData(key, value, callback) {
   });
 }
 
-export { generateTable, stashData, convertTypedArrays, saveDataAsFile };
+export {
+  generateTable,
+  stashData,
+  convertTypedArrays,
+  saveDataAsFile,
+  getTableData,
+};
