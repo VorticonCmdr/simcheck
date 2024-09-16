@@ -1057,7 +1057,7 @@ chrome.runtime.onConnect.addListener(function (port) {
             port.postMessage({
               type: "status",
               status: 404,
-              statusText: "no data to embed",
+              statusText: "no (new) data to embed",
             });
             break;
           }

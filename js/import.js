@@ -367,6 +367,11 @@ async function init() {
       return;
     }
 
+    if (selectedFields.length < 1) {
+      errorMessage("no fields to embed selected");
+      return;
+    }
+
     let tableName = $("#saveTableInput").val()?.trim();
     if (!tableName) {
       errorMessage("object store name not set");
