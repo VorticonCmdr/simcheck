@@ -7,6 +7,14 @@ a chrome extension to generate, compare and visualize vector embeddings
 ## goal
 this is not meant as an production ready product but rather an accessible entrypoint into to using embeddings for other things than RAG only
 
+## versions
+v0.0.3 – bug fixes for model changing bug
+v0.0.2 – csv export bug fix
+v0.0.1 – initial release
+
+## help page
+[google doc](https://docs.google.com/document/d/1wnIekRglMEkagw6dsucxNRkHclpQE_ptwkIyXzNvQ1s/)
+
 ## used libraries
 
 ### [transformers.js](https://github.com/xenova/transformers.js)
