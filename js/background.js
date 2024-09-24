@@ -49,6 +49,10 @@ let embeddingsExtractor = null;
 
 import { settings, initializeSettings } from "/js/settings.js";
 async function init() {
+  if (embeddingsExtractor) {
+    embeddingsExtractor.dispose();
+    console.log("dispose");
+  }
   await initializeSettings();
   if (settings.pipeline.model.startsWith("openai")) {
     return;
@@ -191,7 +195,7 @@ async function sendMessage(message) {
 async function createEmbeddings(data) {
   let docsLength = data.docs.length;
 
-  const chunkSize = 10; // Adjust this size based on performance needs
+  let chunkSize = 2; // Adjust this size based on performance needs
   let processedDocs = [];
   let totalProcessed = 0;
   let totalStartTime = Date.now();
@@ -240,7 +244,6 @@ async function processChunk(
       return `${accumulator}${doc[currentValue]} `;
     }, "");
     let embedding = await embeddingsExtractor(text, {
-      normalize: true,
       pooling: "cls",
     });
 
@@ -947,6 +950,14 @@ chrome.runtime.onConnect.addListener(function (port) {
     simcheckPromiseResolve();
     port.onMessage.addListener(async function (message) {
       switch (message.action) {
+        case "init":
+          init();
+          sendMessage({
+            type: "(re)initialized",
+            model: "model",
+            status: "ready",
+          });
+          break;
         case "restoreHNSW":
           let restoreHNSWresult = await restoreHNSW(message);
           sendMessage({

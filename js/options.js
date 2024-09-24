@@ -265,6 +265,7 @@ async function init() {
 
     settings.pipeline.model = dataModelValue;
     await setSettings(settings);
+    simcheckPort.postMessage({ action: "init" });
     location.reload();
   });
 
