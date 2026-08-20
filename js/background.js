@@ -462,9 +462,9 @@ async function searchDataOpenAi(text) {
       const cursor = event.target.result;
       if (cursor) {
         let doc = cursor.value;
-        const vectorValue = doc["embeddings"][settings.pipeline.model];
+        const vectorValue = doc["embeddings"]?.[settings.pipeline.model];
 
-        if (vectorValue.length == queryVectorLength) {
+        if (vectorValue?.length == queryVectorLength) {
           // Only add the vector to the results set if the vector is the same length as query.
           const similarity = cos_sim(vectorValue, queryVector);
           doc["score"] = parseFloat(similarity.toPrecision(2));
@@ -533,9 +533,9 @@ async function searchDataHF(message) {
       const cursor = event.target.result;
       if (cursor) {
         let doc = cursor.value;
-        const vectorValue = doc["embeddings"][message.settings.pipeline.model];
+        const vectorValue = doc["embeddings"]?.[message.settings.pipeline.model];
 
-        if (vectorValue.length == queryVectorLength) {
+        if (vectorValue?.length == queryVectorLength) {
           const similarity = cos_sim(vectorValue, queryVector);
           doc["score"] = parseFloat(similarity.toPrecision(2));
           delete doc["embeddings"];
