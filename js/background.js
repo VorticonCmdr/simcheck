@@ -674,19 +674,22 @@ async function generateHNSW(message) {
     await hnsw.buildIndex(data);
     tableData.forEach((row, rowIndex) => {
       let hnswNode = hnsw.nodes.get(row[message.indexedDB.keyPath]);
-      hnswNode["M"] = hnsw.M;
-      hnswNode["efConstruction"] = hnsw.efConstruction;
-      hnswNode["levelMax"] = hnsw.levelMax;
-      hnswNode["entryPointId"] = hnsw.entryPointId;
-      delete hnswNode.id;
-      delete hnswNode.vector;
       if (!hnswNode) {
         return;
       }
+      // Persist a copy, not the live node, so deleting vector/id below
+      // doesn't corrupt the in-memory index this same request just built.
+      let persistedNode = { ...hnswNode };
+      persistedNode["M"] = hnsw.M;
+      persistedNode["efConstruction"] = hnsw.efConstruction;
+      persistedNode["levelMax"] = hnsw.levelMax;
+      persistedNode["entryPointId"] = hnsw.entryPointId;
+      delete persistedNode.id;
+      delete persistedNode.vector;
       if (!tableData[rowIndex]["hnsw"]) {
         tableData[rowIndex]["hnsw"] = {};
       }
-      tableData[rowIndex]["hnsw"][message.pipeline.model] = hnswNode;
+      tableData[rowIndex]["hnsw"][message.pipeline.model] = persistedNode;
     });
 
     let keysSet = new Set();
