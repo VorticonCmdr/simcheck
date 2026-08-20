@@ -704,7 +704,7 @@ async function generateHNSW(message) {
 }
 
 async function restoreHNSWindex(pipeline, indexedDB, tableData) {
-  if (!tableData[0]?.["hnsw"]?.[pipeline.model]) {
+  if (!tableData.every((d) => d?.["hnsw"]?.[pipeline.model])) {
     await generateHNSW({
       pipeline: pipeline,
       indexedDB: indexedDB,
