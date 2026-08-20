@@ -77,11 +77,14 @@ async function getCachedOnnx() {
   const cache = await caches.open("transformers-cache");
   const requests = await cache.keys();
 
-  const extractKey = (url) => url.match(/huggingface\.co\/([^\/]+\/[^\/]+)/)[1];
+  const extractKey = (url) => url.match(/huggingface\.co\/([^\/]+\/[^\/]+)/)?.[1];
 
   const aggregated = await requests.reduce(async (accPromise, request) => {
     const acc = await accPromise;
     const key = extractKey(request.url);
+    if (!key) {
+      return acc;
+    }
     if (!acc[key]) {
       acc[key] = { name: key, size: 0, quantized: "" };
     }
@@ -328,7 +331,7 @@ async function init() {
       keyPath: settings.indexedDB.keyPath,
       version: settings.indexedDB.version,
     });
-    await setSettings();
+    await setSettings(settings);
     deleteObjectStoreQuestionModal.hide();
     location.reload();
   });
