@@ -148,6 +148,9 @@ async function processCluster(response) {
   dbscan._assigned.forEach((cluster, index) => {
     tableData[index]["dbscanCluster"] = cluster;
   });
+  dbscan.noise.forEach((index) => {
+    tableData[index]["dbscanCluster"] = -1;
+  });
 
   clusterCenters.forEach((clusterCenter) => {
     let minDist = 0xffff;
