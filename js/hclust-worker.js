@@ -383,12 +383,14 @@ async function processClusterData(data) {
   let tableData = await loopTables(data);
 
   // keyPath and model must be identical for both datasets
-  let embeddings = tableData.map((row) => {
-    return {
-      id: row[data[0].keyPath],
-      value: row.embeddings[data[0].model],
-    };
-  });
+  let embeddings = tableData
+    .filter((row) => row.embeddings?.[data[0].model])
+    .map((row) => {
+      return {
+        id: row[data[0].keyPath],
+        value: row.embeddings[data[0].model],
+      };
+    });
 
   let clusterResult = clusterData({
     data: embeddings,
