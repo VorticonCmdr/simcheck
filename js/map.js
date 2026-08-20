@@ -206,14 +206,6 @@ function handleZoom(event) {
   //throttledGetVisibleCircles();
   //svg.attr("transform", event.transform);
   d3.selectAll(".datalayer").attr("transform", event.transform);
-  let found = board.flatbushIndex
-    .search(
-      event.transform.invertX(0),
-      event.transform.invertY(0),
-      event.transform.invertX(board.width),
-      event.transform.invertY(board.height),
-    )
-    .map((i) => board.mapsData[i]);
   //console.log(event.transform.k);
 }
 
