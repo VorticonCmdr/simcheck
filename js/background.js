@@ -788,6 +788,9 @@ async function compareArrays(array1, array2, array2keyPath, key) {
     pos1++;
 
     const vec1 = obj1?.["embeddings"]?.[key];
+    if (!vec1?.length) {
+      continue;
+    }
 
     const results = hnsw.searchKNN(vec1, 1);
     //const results = sbq.knnSearch(vec1, 1);
@@ -797,6 +800,9 @@ async function compareArrays(array1, array2, array2keyPath, key) {
     }
 
     bestMatch = array2Dict[results[0]["id"]];
+    if (!bestMatch) {
+      continue;
+    }
     res["score"] = parseFloat(results[0]["score"]?.toFixed(3));
     /*
     for (let obj2 of array2) {
