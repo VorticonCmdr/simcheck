@@ -365,7 +365,7 @@ function findOptimalClusters(variances) {
 async function loopTables(data) {
   let resultData = [];
 
-  for (d in data) {
+  for (let d in data) {
     let db = await openDatabase(
       data[d].databaseName,
       data[d].tableName,
