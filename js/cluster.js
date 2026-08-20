@@ -154,6 +154,7 @@ async function processCluster(response) {
 
   clusterCenters.forEach((clusterCenter) => {
     let minDist = 0xffff;
+    let closestIndex = null;
     clusterCenter.parts.forEach((tableDataIndex) => {
       let dist = euclideanDistance2D(
         clusterCenter.x,
@@ -163,9 +164,12 @@ async function processCluster(response) {
       );
       if (dist < minDist) {
         minDist = dist;
-        tableData[tableDataIndex]["center"] = true;
+        closestIndex = tableDataIndex;
       }
     });
+    if (closestIndex !== null) {
+      tableData[closestIndex]["center"] = true;
+    }
   });
 
   setProgressbar({
