@@ -52,26 +52,26 @@ async function readActivities(fileList) {
     return;
   }
 
-  [...fileList].forEach(async (file, index) => {
+  for (const file of fileList) {
     let objectStoreName = file.name?.split(".")?.[0];
     if (!objectStoreName) {
-      return;
+      continue;
     }
     settings.indexedDB.tableName = objectStoreName;
 
     let data = await processFile(file);
     if (!data) {
-      return;
+      continue;
     }
 
     dataToImport = parseAndConvertString(data);
     if (!dataToImport || !dataToImport[0]) {
-      return;
+      continue;
     }
 
     let keys = Object.keys(dataToImport[0]);
     if (!keys.length) {
-      return;
+      continue;
     }
 
     let idFieldsHtml = keys.reduce(
@@ -81,7 +81,7 @@ async function readActivities(fileList) {
       "<option selected disabled>please select id field</option>",
     );
     $("#idFields").html(idFieldsHtml);
-  });
+  }
 }
 
 async function saveImportToStore(dataToImport) {
