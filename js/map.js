@@ -280,7 +280,7 @@ function colorClusters() {
 function colorCircles(pattern) {
   board.circles
     .filter(function (d) {
-      return d && d?.[pattern.attr].match(pattern.regex);
+      return d && d[pattern.attr]?.match(pattern.regex);
     })
     .attr("fill", pattern.color)
     .attr("opacity", config.opacity.default)
