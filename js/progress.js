@@ -7,7 +7,7 @@ string message.name
 float message.progress between 0 and 100
 */
 async function setProgressbar(message) {
-  if (message.progress || message.finished) {
+  if (typeof message.progress === "number" || message.finished) {
     if (message.progress < 100) {
       $progress
         .addClass("progress-bar-striped progress-bar-animated")
