@@ -3,6 +3,7 @@ import "bootstrap-icons/font/bootstrap-icons.css";
 import * as bootstrap from "bootstrap";
 import * as d3 from "d3";
 
+import { notifyError } from "/js/notify.js";
 import { settings, initializeSettings } from "/js/settings.js";
 
 import { firstEntry, openDatabase } from "/js/indexeddb.js";
@@ -873,19 +874,19 @@ async function init() {
     };
     pattern.regex = $("#attrRegex").val();
     if (!pattern.regex) {
-      console.error("missing regex");
+      notifyError("enter a regex to color by");
       return;
     }
     pattern.regex = parseInput(pattern.regex);
 
     pattern.color = $("#attrRegexColor").val();
     if (!pattern.color) {
-      console.error("missing color");
+      notifyError("choose a color");
       return;
     }
     pattern.attr = $("#colorFields option:selected").val();
     if (!pattern.attr) {
-      console.error("missing attr");
+      notifyError("choose a field to match the regex against");
       return;
     }
     config.regexes.push(pattern);

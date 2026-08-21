@@ -2,6 +2,7 @@ import "bootstrap/dist/css/bootstrap.min.css";
 import "bootstrap-icons/font/bootstrap-icons.css";
 import * as bootstrap from "bootstrap";
 
+import { notifyError } from "/js/notify.js";
 import { settings, setSettings, initializeSettings } from "/js/settings.js";
 import {
   getAllData,
@@ -17,6 +18,7 @@ import "/js/filedrop.js";
 import { PortConnector } from "/js/messages.js";
 const simcheckPort = new PortConnector({
   customMessageHandler: messageHandler,
+  replayLastMessage: true,
 });
 
 async function messageHandler(message) {
@@ -26,6 +28,9 @@ async function messageHandler(message) {
         window.location.reload();
       }
       setProgressbar(message);
+      break;
+    case "status":
+      notifyError(message.statusText);
       break;
     default:
     //console.log(message);

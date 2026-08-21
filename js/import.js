@@ -1,10 +1,11 @@
 import "bootstrap/dist/css/bootstrap.min.css";
 import "bootstrap-icons/font/bootstrap-icons.css";
 import "select2/dist/css/select2.min.css";
-import * as bootstrap from "bootstrap";
+import "bootstrap";
 import Papa from "papaparse";
 import Sortable from "sortablejs";
 
+import { notifyError } from "/js/notify.js";
 import { settings, getSettings, setSettings } from "/js/settings.js";
 import {
   getAllKeys,
@@ -42,22 +43,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 import { PortConnector } from "/js/messages.js";
 const simcheckPort = new PortConnector({
   customMessageHandler: messageHandler,
-});
-
-chrome.storage.local.get("lastMessage", (result) => {
-  if (!chrome.runtime.lastError) {
-    if (result.lastMessage !== undefined) {
-      messageHandler(result.lastMessage);
-      chrome.storage.local.remove("lastMessage", () => {
-        if (chrome.runtime.lastError) {
-          console.error(
-            "Error deleting message:",
-            chrome.runtime.lastError.message,
-          );
-        }
-      });
-    }
-  }
+  replayLastMessage: true,
 });
 
 async function messageHandler(message) {
@@ -95,7 +81,7 @@ async function messageHandler(message) {
       $("#numberOfTokens").text(`${message.size} tokens`);
       break;
     case "status":
-      errorMessage(message.statusText);
+      notifyError(message.statusText);
       break;
     default:
       console.log(message);
@@ -245,14 +231,6 @@ function parseCsvData(textData) {
   $("#idFields").html(idFieldsHtml);
 }
 
-const warningToast = document.getElementById("warningToast");
-async function errorMessage(error) {
-  const warningToastBootstrap =
-    bootstrap.Toast.getOrCreateInstance(warningToast);
-  $("#warning-text").text(error);
-  warningToastBootstrap.show();
-}
-
 async function handleIndexedDB() {
   let objectStores = await getObjectStoreNamesAndMeta(settings.indexedDB);
 
@@ -370,18 +348,18 @@ async function init() {
 
   $generateEmbeddings.on("click", async function () {
     if (!settings.indexedDB.keyPath) {
-      errorMessage("object store id not set");
+      notifyError("object store id not set");
       return;
     }
 
     if (selectedFields.length < 1) {
-      errorMessage("no fields to embed selected");
+      notifyError("no fields to embed selected");
       return;
     }
 
     let tableName = $("#saveTableInput").val()?.trim();
     if (!tableName) {
-      errorMessage("object store name not set");
+      notifyError("object store name not set");
       return;
     }
     settings.indexedDB.tableName = tableName;

@@ -1,5 +1,9 @@
 class PortConnector {
-  constructor({ portName = "simcheck", customMessageHandler = null } = {}) {
+  constructor({
+    portName = "simcheck",
+    customMessageHandler = null,
+    replayLastMessage = false,
+  } = {}) {
     this.portName = portName;
     this.port = null;
     this.isConnected = false;
@@ -9,6 +13,30 @@ class PortConnector {
 
     this.keepAliveInterval = null;
     this.connect();
+
+    if (replayLastMessage) {
+      this.replayLastMessage();
+    }
+  }
+
+  // Recovers status after a reload mid-operation: background.js caches its
+  // last broadcast message under chrome.storage.local["lastMessage"], since
+  // a page that (re)connects late would otherwise never see it.
+  replayLastMessage() {
+    chrome.storage.local.get("lastMessage", (result) => {
+      if (chrome.runtime.lastError || result.lastMessage === undefined) {
+        return;
+      }
+      this.messageHandler(result.lastMessage);
+      chrome.storage.local.remove("lastMessage", () => {
+        if (chrome.runtime.lastError) {
+          console.error(
+            "Error deleting message:",
+            chrome.runtime.lastError.message,
+          );
+        }
+      });
+    });
   }
 
   connect() {

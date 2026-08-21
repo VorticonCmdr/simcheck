@@ -5,6 +5,7 @@ import "bootstrap";
 import Sortable from "sortablejs";
 import { UMAP } from "umap-js";
 
+import { notifyError } from "/js/notify.js";
 import { settings, initializeSettings } from "/js/settings.js";
 import { saveData, getAllData } from "/js/indexeddb.js";
 import { setProgressbar } from "/js/progress.js";
@@ -342,6 +343,7 @@ async function init() {
   $clusterEmbeddings.on("click", function () {
     let objectStores = sortable.toArray();
     if (!objectStores.length) {
+      notifyError("select at least one object store to cluster");
       return;
     }
     clusterEmbeddings(objectStores);
