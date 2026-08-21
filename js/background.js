@@ -928,6 +928,176 @@ function findCentralItems(dataset, settings, similarityFunction) {
   return dataset;
 }
 
+// Each handler implements exactly one port action. Which response mechanism
+// a handler uses (the persisting/broadcasting sendMessage vs. a direct
+// port.postMessage reply) is a deliberate per-action choice, not
+// inconsistency to normalize away -- sendMessage also caches the message
+// under chrome.storage.local["lastMessage"] for PortConnector's
+// replayLastMessage option (see js/messages.js), which only actions that
+// report ongoing/background progress need.
+
+async function handleInit() {
+  // Not awaited: init() re-loads the embedding pipeline in the background
+  // while this reply fires immediately, matching the original behavior.
+  init();
+  sendMessage({
+    type: "(re)initialized",
+    model: "model",
+    status: "ready",
+  });
+}
+
+async function handleRestoreHNSW(message) {
+  let restoreHNSWresult = await restoreHNSW(message);
+  sendMessage({
+    type: "loading",
+    model: "hnsw restore",
+    status: JSON.stringify(restoreHNSWresult),
+  });
+}
+
+async function handleGenerateHNSW(message) {
+  await generateHNSW(message);
+  sendMessage({
+    type: "loading",
+    model: "hnsw",
+    status: "ready",
+  });
+}
+
+async function handleSearchHNSW(message, port) {
+  let hnswSerpData = await searchHNSW(message);
+  port.postMessage({
+    type: "serp",
+    result: hnswSerpData,
+  });
+}
+
+async function handleCreateNotification(message) {
+  createNotification(message.text);
+}
+
+async function handleCompareEmbeddings(message) {
+  let compareTableData = compareEmbeddings(
+    message.obj1,
+    message.obj2,
+    message.modelName,
+  );
+  sendMessage({
+    type: "serp",
+    result: compareTableData,
+  });
+}
+
+async function handlePing(message, port) {
+  port.postMessage({
+    type: "pong",
+  });
+}
+
+async function handlePong() {
+  // do nothing
+}
+
+async function handleCompare(message) {
+  let tableData = await compareStores(message);
+  sendMessage({
+    type: "serp",
+    result: tableData,
+  });
+}
+
+async function handleGetNumberOfTokens(message, port) {
+  let size = await getNumberOfTokens(message.text);
+  port.postMessage({
+    type: "numberOfTokens",
+    size: size,
+  });
+}
+
+async function handleGetObjectStoreNames(message, port) {
+  let objectStores = await getObjectStoreNames(
+    message.databaseName || settings.databaseName,
+  );
+  port.postMessage({
+    type: "objectStoreNames",
+    result: objectStores,
+  });
+}
+
+async function handleDownload(message, port) {
+  // Fire-and-forget: downloadModel reports progress via sendMessage
+  // internally, so the handler doesn't need to await completion.
+  downloadModel(port, message.name);
+}
+
+async function handleSearch(message, port) {
+  if (settings.pipeline.model.startsWith("openai")) {
+    let result = await searchDataOpenAi(message.query);
+    port.postMessage({
+      type: "serp",
+      result: result,
+    });
+  } else {
+    let result = await searchDataHF(message);
+    port.postMessage({
+      type: "serp",
+      result: result,
+    });
+  }
+}
+
+async function handleDataStored(message, port) {
+  let storedTableData = await getAllData(message.indexedDB);
+
+  if (message.keepEmbeddings) {
+    storedTableData = storedTableData.filter(
+      (item) => !item?.embeddings?.[settings.pipeline.model],
+    );
+  }
+
+  if (!storedTableData.length) {
+    port.postMessage({
+      type: "status",
+      status: 404,
+      statusText: "no (new) data to embed",
+    });
+    return;
+  }
+
+  // eg "openai/text-embedding-3-small"
+  if (settings.pipeline.model.startsWith("openai")) {
+    await createOpenAiEmbeddings({
+      selectedFields: message.selectedFields,
+      key: settings.indexedDB.keyPath,
+      docs: storedTableData,
+    });
+  } else {
+    await createEmbeddings({
+      selectedFields: message.selectedFields,
+      key: settings.indexedDB.keyPath,
+      docs: storedTableData,
+    });
+  }
+}
+
+const actionHandlers = {
+  init: handleInit,
+  restoreHNSW: handleRestoreHNSW,
+  generateHNSW: handleGenerateHNSW,
+  searchHNSW: handleSearchHNSW,
+  createNotification: handleCreateNotification,
+  compareEmbeddings: handleCompareEmbeddings,
+  ping: handlePing,
+  pong: handlePong,
+  compare: handleCompare,
+  getNumberOfTokens: handleGetNumberOfTokens,
+  getObjectStoreNames: handleGetObjectStoreNames,
+  download: handleDownload,
+  search: handleSearch,
+  "data-stored": handleDataStored,
+};
+
 // runtime.connect ports
 let ports = {};
 let simcheckInitialized = false;
@@ -943,157 +1113,24 @@ chrome.runtime.onConnect.addListener(function (port) {
     simcheckInitialized = true;
     simcheckPromiseResolve();
     port.onMessage.addListener(async function (message) {
-      switch (message.action) {
-        case "init":
-          init();
-          sendMessage({
-            type: "(re)initialized",
-            model: "model",
-            status: "ready",
-          });
-          break;
-        case "restoreHNSW": {
-          let restoreHNSWresult = await restoreHNSW(message);
-          sendMessage({
-            type: "loading",
-            model: "hnsw restore",
-            status: JSON.stringify(restoreHNSWresult),
-          });
-          break;
-        }
-        case "generateHNSW":
-          await generateHNSW(message);
-          sendMessage({
-            type: "loading",
-            model: "hnsw",
-            status: "ready",
-          });
-          break;
-        case "searchHNSW": {
-          let hnswSerpData = await searchHNSW(message);
-          port.postMessage({
-            type: "serp",
-            result: hnswSerpData,
-          });
-          break;
-        }
-        case "createNotification":
-          createNotification(message.text);
-          break;
-        case "compareEmbeddings": {
-          let compareTableData = compareEmbeddings(
-            message.obj1,
-            message.obj2,
-            message.modelName,
-          );
-          sendMessage({
-            type: "serp",
-            result: compareTableData,
-          });
-          break;
-        }
-        case "ping":
-          port.postMessage({
-            type: "pong",
-          });
-          break;
-        case "pong":
-          // do nothing
-          break;
-        case "compare": {
-          let tableData = await compareStores(message);
-          sendMessage({
-            type: "serp",
-            result: tableData,
-          });
-          break;
-        }
-        case "getNumberOfTokens": {
-          let size = await getNumberOfTokens(message.text);
-          port.postMessage({
-            type: "numberOfTokens",
-            size: size,
-          });
-          break;
-        }
-        case "getObjectStoreNames":
-          try {
-            let objectStores = await getObjectStoreNames(
-              message.databaseName || settings.databaseName,
-            );
-            port.postMessage({
-              type: "objectStoreNames",
-              result: objectStores,
-            });
-          } catch (error) {
-            port.postMessage({
-              status: 500,
-              statusText: "Internal Server Error",
-              error: error,
-            });
-          }
-          break;
-        case "download":
-          // Fire-and-forget: downloadModel reports progress via sendMessage
-          // internally, so the handler doesn't need to await completion.
-          downloadModel(port, message.name);
-          break;
-        case "search":
-          if (settings.pipeline.model.startsWith("openai")) {
-            let result = await searchDataOpenAi(message.query);
-            port.postMessage({
-              type: "serp",
-              result: result,
-            });
-          } else {
-            let result = await searchDataHF(message);
-            port.postMessage({
-              type: "serp",
-              result: result,
-            });
-          }
-          break;
-        case "data-stored": {
-          let storedTableData = await getAllData(message.indexedDB);
-
-          if (message.keepEmbeddings) {
-            storedTableData = storedTableData.filter(
-              (item) => !item?.embeddings?.[settings.pipeline.model],
-            );
-          }
-
-          if (!storedTableData.length) {
-            port.postMessage({
-              type: "status",
-              status: 404,
-              statusText: "no (new) data to embed",
-            });
-            break;
-          }
-
-          // eg "openai/text-embedding-3-small"
-          if (settings.pipeline.model.startsWith("openai")) {
-            await createOpenAiEmbeddings({
-              selectedFields: message.selectedFields,
-              key: settings.indexedDB.keyPath,
-              docs: storedTableData,
-            });
-          } else {
-            await createEmbeddings({
-              selectedFields: message.selectedFields,
-              key: settings.indexedDB.keyPath,
-              docs: storedTableData,
-            });
-          }
-          break;
-        }
-        default:
-          // not found
-          port.postMessage({
-            status: 404,
-            statusText: "Not Found",
-            request: message,
-          });
+      const handler = actionHandlers[message.action];
+      if (!handler) {
+        port.postMessage({
+          status: 404,
+          statusText: "Not Found",
+          request: message,
+        });
+        return;
+      }
+      try {
+        await handler(message, port);
+      } catch (error) {
+        console.error(`Error handling "${message.action}":`, error);
+        port.postMessage({
+          status: 500,
+          statusText: "Internal Server Error",
+          error: error.message,
+        });
       }
     });
     return;
