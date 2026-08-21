@@ -22,7 +22,11 @@ let settings = {
   },
 };
 
-async function setSettings(settings) {
+async function setSettings(newSettings = settings) {
+  // Update the module singleton synchronously rather than waiting for the
+  // chrome.storage.onChanged round trip, so code reading `settings` right
+  // after a setSettings() call in the same context sees the new value.
+  settings = newSettings;
   chrome.storage.local.set({ ["settings"]: settings }, async () => {
     if (chrome.runtime.lastError) {
       console.error("Error storing data:", chrome.runtime.lastError);

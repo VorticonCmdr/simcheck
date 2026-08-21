@@ -80,6 +80,12 @@ const firstEntry = async ({ databaseName = "simcheck" }, objectStoreName) => {
 
 function openDatabase(settings, readonly) {
   return new Promise((resolve, reject) => {
+    // Write-mode opens always request settings.version + 1, even if nothing
+    // about the schema actually changed: it's what makes onupgradeneeded fire
+    // so we can lazily create the object store if it's still missing. Callers
+    // that need a write-mode connection should go through openForWrite below
+    // rather than reading settings.version themselves, since it's only ever
+    // meaningful immediately after a fresh readonly probe.
     const request = indexedDB.open(
       settings.databaseName,
       readonly ? undefined : settings.version + 1,
@@ -104,6 +110,22 @@ function openDatabase(settings, readonly) {
       reject(event.target.error);
     };
   });
+}
+
+async function getCurrentDbVersion(settings) {
+  const db = await openDatabase(settings, true);
+  const version = db.version;
+  db.close();
+  return version;
+}
+
+// Refreshes settings.version from the live database immediately before
+// opening write-mode, so the version+1 request in openDatabase is never
+// based on a stale/never-persisted number. Use this instead of hand-rolling
+// the read-then-reopen dance at each call site.
+async function openForWrite(settings) {
+  settings.version = await getCurrentDbVersion(settings);
+  return openDatabase(settings, false);
 }
 
 function getDBkeypath(databaseName, tableName) {
@@ -162,11 +184,8 @@ function getObjectStoreSize(db, storeName) {
 }
 
 function deleteObjectStore(settings) {
-  return openDatabase(settings, true)
-    .then((db) => {
-      const currentVersion = db.version;
-      db.close();
-
+  return getCurrentDbVersion(settings)
+    .then((currentVersion) => {
       settings.version = currentVersion + 1;
       return new Promise((resolve, reject) => {
         const request = indexedDB.open(settings.databaseName, settings.version);
@@ -200,10 +219,7 @@ function deleteObjectStore(settings) {
 }
 
 async function getAllKeys(settings) {
-  let db = await openDatabase(settings, true);
-  settings.version = db.version;
-  db.close();
-  return openDatabase(settings, false)
+  return openForWrite(settings)
     .then((db) => {
       return new Promise((resolve, reject) => {
         const transaction = db.transaction(settings.tableName, "readonly");
@@ -228,11 +244,7 @@ async function getAllKeys(settings) {
 
 async function saveData(settings, dataArray, keySet, progressFunction) {
   return new Promise(async (resolve, reject) => {
-    let db = await openDatabase(settings, true);
-    settings.version = db.version;
-    db.close();
-
-    db = await openDatabase(settings, false);
+    const db = await openForWrite(settings);
     const transaction = db.transaction([settings.tableName], "readwrite");
     let store = transaction.objectStore(settings.tableName);
 
@@ -263,7 +275,10 @@ async function saveData(settings, dataArray, keySet, progressFunction) {
       .forEach((data, index) => {
         const request = store.put(data);
         request.onerror = (event) => {
-          //errorMessage(`Error saving data: ${event.target.error}`);
+          // Without this, an unhandled per-request error aborts the whole
+          // transaction (per the IndexedDB spec) instead of just skipping
+          // this one record, which defeats the point of iterating row by row.
+          event.preventDefault();
           console.log(`Error saving data: ${event.target.error}`);
         };
         request.onsuccess = (event) => {
@@ -280,11 +295,7 @@ async function saveData(settings, dataArray, keySet, progressFunction) {
 
 async function addData(settings, dataArray, keySet, progressFunction) {
   return new Promise(async (resolve, reject) => {
-    let db = await openDatabase(settings, true);
-    settings.version = db.version;
-    db.close();
-
-    db = await openDatabase(settings, false);
+    const db = await openForWrite(settings);
     const transaction = db.transaction([settings.tableName], "readwrite");
     let store = transaction.objectStore(settings.tableName);
 
@@ -313,7 +324,9 @@ async function addData(settings, dataArray, keySet, progressFunction) {
       .forEach((data, index) => {
         const request = store.add(data);
         request.onerror = (event) => {
-          //errorMessage(`Error saving data: ${event.target.error}`);
+          // See saveData's identical handler: without preventDefault() this
+          // aborts the whole transaction instead of skipping this one record.
+          event.preventDefault();
           console.log(`Error saving data: ${event.target.error}`);
         };
         request.onsuccess = (event) => {
