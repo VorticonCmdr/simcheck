@@ -483,7 +483,7 @@ async function searchDataOpenAi(text) {
 
     request.onerror = (event) => {
       console.log(event.target.error);
-      reject(scoreList);
+      reject(event.target.error);
     };
   });
 }
@@ -553,7 +553,7 @@ async function searchDataHF(message) {
 
     request.onerror = (event) => {
       console.log(event.target.error);
-      reject(scoreList);
+      reject(event.target.error);
     };
   });
 }

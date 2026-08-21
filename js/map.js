@@ -240,9 +240,16 @@ function brushed({ selection }) {
       }
     });
     if (board.selectedCircles.length > 0) {
-      let html = accordionTemplate({
-        hits: board.selectedCircles,
+      let items = board.selectedCircles.map((circle) => {
+        return {
+          title: circle[config.labels.title],
+          description: circle[config.labels.description],
+          id: circle[settings.indexedDB.keyPath],
+          clicked: circle.clicked,
+          color: circle.color,
+        };
       });
+      let html = Handlebars.templates.accordionItem(items);
       $("#accordionRelated").html(html);
       $bsOffcanvas.show();
     }
