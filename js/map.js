@@ -16,7 +16,7 @@ const $bsOffcanvas = new bootstrap.Offcanvas("#offcanvasRight");
 const $offcanvasRightElement = document.getElementById("offcanvasRight");
 const $clusterSelect = $("#clusterSelect");
 
-let mapData = {};
+let mapDataById = {};
 
 let board = {
   flatbushIndex: null,
@@ -24,6 +24,8 @@ let board = {
   coordinates: [],
   selectedCircles: [],
   sums: [],
+  // Recomputed by setupClusterSelect() as the count of rows flagged
+  // center:true, which is exactly one per distinct dbscanCluster.
   numberOfClusters: 1,
   width: $("#board").width(),
   height: $("#board").height(),
@@ -88,11 +90,11 @@ async function loadMapData(db, tableName) {
         if (cursor) {
           let doc = cursor.value;
           Object.keys(doc).forEach((key) => config.fields.available.add(key));
-          mapData[doc[settings.indexedDB.keyPath]] = doc;
+          mapDataById[doc[settings.indexedDB.keyPath]] = doc;
           cursor.continue();
         } else {
           //resolve(event.target.result);
-          board.mapsData = Object.values(mapData);
+          board.mapsData = Object.values(mapDataById);
           resolve(true);
         }
       }
@@ -127,7 +129,7 @@ function setupSelects() {
 }
 
 async function loadData(objectStoreName) {
-  mapData = {};
+  mapDataById = {};
   let db = await openDatabase(settings.indexedDB, true);
 
   let loaded = await loadMapData(db, settings.indexedDB.tableName);
@@ -149,87 +151,31 @@ function buildFlatbush() {
   board.flatbushIndex.finish();
 }
 
-// Throttle function implementation
-function throttle(func, limit) {
-  let lastFunc;
-  let lastRan;
-  return function () {
-    const context = this;
-    const args = arguments;
-    if (!lastRan) {
-      func.apply(context, args);
-      lastRan = Date.now();
-    } else {
-      clearTimeout(lastFunc);
-      lastFunc = setTimeout(
-        function () {
-          if (Date.now() - lastRan >= limit) {
-            func.apply(context, args);
-            lastRan = Date.now();
-          }
-        },
-        limit - (Date.now() - lastRan),
-      );
-    }
-  };
-}
-
-// Function to get all circles currently in view
-function getVisibleCircles() {
-  const svg = document.querySelector("svg");
-  const svgRect = svg.getBoundingClientRect();
-  const circles = svg.querySelectorAll("circle");
-  const visibleCircles = [];
-
-  circles.forEach((circle) => {
-    const circleRect = circle.getBoundingClientRect();
-
-    // Check if circle is in view
-    if (
-      circleRect.right > svgRect.left &&
-      circleRect.left < svgRect.right &&
-      circleRect.bottom > svgRect.top &&
-      circleRect.top < svgRect.bottom
-    ) {
-      visibleCircles.push(circle);
-    }
-  });
-
-  const circleIds = visibleCircles.map((circle) => `#${circle.id}`);
-  return d3.selectAll(circleIds.join(", "));
-}
-
-const throttledGetVisibleCircles = throttle(() => {
-  const visibleCircles = getVisibleCircles();
-  //visibleCircles.attr("stroke", "blue");
-}, 200);
-
 function handleZoom(event) {
-  board["circles"].style("display", (d) => {
+  board.circles.style("display", (d) => {
     return d.center || d.clicked ? null : "none";
   });
-  //throttledGetVisibleCircles();
   //svg.attr("transform", event.transform);
   d3.selectAll(".datalayer").attr("transform", event.transform);
   //console.log(event.transform.k);
 }
 
 function resetZoom() {
-  d3.selectAll(".datalayer").transition().call(board["zoom"].scaleTo, 1);
+  d3.selectAll(".datalayer").transition().call(board.zoom.scaleTo, 1);
 
   d3.selectAll(".datalayer")
     .transition()
-    .call(board["zoom"].translateTo, 0.5 * board.width, 0.5 * board.height);
+    .call(board.zoom.translateTo, 0.5 * board.width, 0.5 * board.height);
 }
 
 function brushed({ selection }) {
   if (selection === null) {
-    board["circles"].attr("stroke", null);
+    board.circles.attr("stroke", null);
   } else {
     let tx = d3.zoomTransform(board.svg.select("#circles")["_groups"][0][0]);
     let [[x0, y0], [x1, y1]] = selection;
     board.selectedCircles = [];
-    board["circles"].each(function (d, i) {
+    board.circles.each(function (d, i) {
       let elem = d3.select(this);
       let cx = tx.x + elem.attr("cx") * tx.k;
       let cy = tx.y + elem.attr("cy") * tx.k;
@@ -303,32 +249,6 @@ function colorByRegexes() {
   $("#coloring").html(html);
 }
 
-// A function to check whether two bounding boxes do not overlap
-const getOverlapFromTwoExtents = (l, r) => {
-  var overlapPadding = 0;
-  l.left = l.x - overlapPadding;
-  l.right = l.x + l.width + overlapPadding;
-  l.top = l.y - overlapPadding;
-  l.bottom = l.y + l.height + overlapPadding;
-  r.left = r.x - overlapPadding;
-  r.right = r.x + r.width + overlapPadding;
-  r.top = r.y - overlapPadding;
-  r.bottom = r.y + r.height + overlapPadding;
-  var a = l;
-  var b = r;
-
-  if (
-    a.left >= b.right ||
-    a.top >= b.bottom ||
-    a.right <= b.left ||
-    a.bottom <= b.top
-  ) {
-    return true;
-  } else {
-    return false;
-  }
-};
-
 function sanitizeForQuerySelector(url) {
   // Define a regex to match valid characters for querySelector
   let validChars = /[a-zA-Z0-9_-]/g;
@@ -360,39 +280,13 @@ function centerNode(id) {
     });
 }
 
-function getCircleCoordinates(clickedCircle) {
-  const selectedCircles = board["circles"].filter(function (circle) {
-    // See colorClusters() above: dbscanCluster's type isn't consistent
-    // across call sites, so loose equality is intentional here.
-    // eslint-disable-next-line eqeqeq
-    if (circle.dbscanCluster == clickedCircle.dbscanCluster) {
-      if (circle === clickedCircle) {
-        circle.clicked = true;
-      } else {
-        circle.clicked = false;
-      }
-      return true;
-    }
-    return false;
-  });
-
-  // Extract x/y coordinates
-  const coordinates = selectedCircles.nodes().map((circle) => {
-    const cx = parseFloat(circle.getAttribute("cx"));
-    const cy = parseFloat(circle.getAttribute("cy"));
-    return { x: cx, y: cy };
-  });
-
-  return coordinates;
-}
-
 function showCluster(clickedCircle) {
   $("#offcanvasRightLabel").text("");
   $("#offcanvasRightLabel").text(clickedCircle.dbscanCluster);
 
   $("#accordionRelated").empty();
 
-  let circles = board["circles"]
+  let circles = board.circles
     .filter(function (circle) {
       // See colorClusters() above: dbscanCluster's type isn't consistent
       // across call sites, so loose equality is intentional here.
@@ -436,13 +330,13 @@ function circleClick(pointerEvent, clickedCircle) {
 function updateCircles(selectedCluster) {
   // See colorClusters() above: dbscanCluster's type isn't consistent across
   // call sites, so loose equality is intentional in this function.
-  board["circles"]
+  board.circles
     // eslint-disable-next-line eqeqeq
     .filter((d) => d.dbscanCluster == selectedCluster)
     .attr("opacity", config.opacity.selected)
     .attr("stroke", "red");
 
-  board["circles"]
+  board.circles
     // eslint-disable-next-line eqeqeq
     .filter((d) => d.dbscanCluster != selectedCluster)
     .attr("opacity", config.opacity.unselected)
@@ -450,27 +344,19 @@ function updateCircles(selectedCluster) {
 }
 
 function resetState() {
-  board["circles"].attr("opacity", config.opacity.default).attr("stroke", null);
-}
-
-function debounce(func, wait) {
-  let timeout;
-  return function (...args) {
-    clearTimeout(timeout);
-    timeout = setTimeout(() => func.apply(this, args), wait);
-  };
+  board.circles.attr("opacity", config.opacity.default).attr("stroke", null);
 }
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function generateMap() {
+function renderLoadingState() {
   if (board.svg) {
     board.svg.selectAll("*").remove();
   }
 
-  board["svg"] = d3
+  board.svg = d3
     .select("#map")
     .attr("height", board.height)
     .attr("width", board.width);
@@ -484,12 +370,9 @@ async function generateMap() {
     .attr("dy", ".35em") // Adjust the y position to center the text vertically
     .text("loading …")
     .attr("class", "center-text"); // Add a class for styling if needed
+}
 
-  await delay(0);
-
-  $("#board").toggleClass("visible");
-  $("#table").toggleClass("invisible");
-
+function computeCoordinateScales() {
   board.coordinates = board.mapsData.map((item) => {
     return {
       x: item.coordinates[0],
@@ -497,17 +380,19 @@ async function generateMap() {
     };
   });
 
-  board["xScale"] = d3
+  board.xScale = d3
     .scaleLinear()
     .range([board.margin.left, board.width - board.margin.right])
     .domain(d3.extent(board.coordinates.map((d) => d.x)));
 
-  board["yScale"] = d3
+  board.yScale = d3
     .scaleLinear()
     .range([board.height - board.margin.bottom, board.margin.top])
     .domain(d3.extent(board.coordinates.map((d) => d.y)));
+}
 
-  board["labels"] = board.svg
+function renderLabels() {
+  board.labels = board.svg
     .append("g")
     .attr("class", "datalayer labels")
     .attr("font-size", 10)
@@ -522,8 +407,10 @@ async function generateMap() {
     .attr("y", (d) => board.yScale(d.coordinates[1]))
     .attr("opacity", 0)
     .text((d) => d[config.labels.title]);
+}
 
-  board["brush"] = d3
+function setupBrush() {
+  board.brush = d3
     .brush()
     .filter((event) => {
       return board.activeBrush || event.target.__data__.type !== "overlay";
@@ -535,11 +422,11 @@ async function generateMap() {
     .attr("class", "brush")
     .call(board.brush)
     .call((g) => g.select(".overlay").style("cursor", "default"));
+}
 
-  buildFlatbush();
-
+function renderCircles() {
   // append circles last to be on top
-  board["circles"] = board.svg
+  board.circles = board.svg
     .append("g")
     .attr("class", "datalayer")
     .selectAll("circle")
@@ -561,10 +448,10 @@ async function generateMap() {
     .attr("opacity", config.opacity.default)
     .attr("data-bs-toggle", "tooltip")
     .on("click", circleClick);
+}
 
-  //prepareBlurMap(board.circles, 2);
-
-  board["zoom"] = d3
+function setupZoomBehavior() {
+  board.zoom = d3
     .zoom()
     .filter((event) => {
       return !board.activeBrush;
@@ -581,15 +468,15 @@ async function generateMap() {
         board.zooming = false;
         d3.select(".labels").style("display", null);
         //d3.select(".grid").style("display", null);
-        board["circles"].style("display", null);
+        board.circles.style("display", null);
       }, board.ZOOM_DELAY);
     });
 
   // initZoom
-  board["zoomer"] = d3.select("svg").call(board["zoom"]);
+  board.zoomer = d3.select("svg").call(board.zoom);
+}
 
-  initializeTooltips();
-
+function wireMapInteractions() {
   board.svg.on("click", (event) => {
     clearTimeout(board.zoomTimeout);
     if (event.target.tagName !== "circle") {
@@ -603,6 +490,24 @@ async function generateMap() {
       resetZoom();
     }
   });
+}
+
+async function generateMap() {
+  renderLoadingState();
+
+  await delay(0);
+
+  $("#board").toggleClass("visible");
+  $("#table").toggleClass("invisible");
+
+  computeCoordinateScales();
+  renderLabels();
+  setupBrush();
+  buildFlatbush();
+  renderCircles();
+  setupZoomBehavior();
+  initializeTooltips();
+  wireMapInteractions();
 
   setupClusterSelect();
 
@@ -625,89 +530,6 @@ function setupClusterSelect() {
         `<option value="${item?.[settings.indexedDB.keyPath]}">${item?.[config.labels.title]}</option>`,
       );
     });
-}
-
-function prepareBlurMap(circles, sigma) {
-  const data = getCoordinatesFromCircles(circles);
-
-  const width = board.width; // Width of the grid
-  const height = board.height; // Height of the grid
-  const gridSize = 3; // Size of each grid cell
-
-  let gridWidth = Math.ceil(width / gridSize);
-  let gridHeight = Math.ceil(height / gridSize);
-  let grid = Array.from({ length: gridHeight }, () => Array(gridWidth).fill(0));
-
-  // Map points to grid
-  data.forEach((point) => {
-    const x = Math.floor(point.x / gridSize);
-    const y = Math.floor(point.y / gridSize);
-    grid[y][x] += 1;
-  });
-
-  let blurredGrid = gaussianBlur(grid, sigma, gridWidth, gridHeight, gridSize);
-
-  const customColorScale = d3
-    .scaleLinear()
-    .domain([0, d3.max(blurredGrid.flat())])
-    .range(["rgb(235, 239, 247)", "rgb(144, 224, 190)"]);
-
-  board["grid"] = board.svg
-    .insert("g", ":first-child")
-    .attr("class", "datalayer grid")
-    .selectAll("rect")
-    .data(blurredGrid.flat())
-    .enter()
-    .append("rect")
-    .attr("x", (d, i) => (i % gridWidth) * gridSize)
-    .attr("y", (d, i) => Math.floor(i / gridWidth) * gridSize)
-    .attr("width", gridSize)
-    .attr("height", gridSize)
-    .attr("fill", (d) => customColorScale(d));
-}
-
-function gaussianBlur(grid, sigma, gridWidth, gridHeight, gridSize) {
-  let kernelSize = Math.ceil(sigma * 3);
-  let kernel = [];
-  let kernelSum = 0;
-
-  // Create Gaussian kernel
-  for (let y = -kernelSize; y <= kernelSize; y++) {
-    for (let x = -kernelSize; x <= kernelSize; x++) {
-      const value = Math.exp(-(x * x + y * y) / (2 * sigma * sigma));
-      kernel.push({ x, y, value });
-      kernelSum += value;
-    }
-  }
-
-  let blurredGrid = Array.from({ length: gridHeight }, () =>
-    Array(gridWidth).fill(0),
-  );
-
-  // Apply kernel to grid
-  for (let y = 0; y < gridHeight; y++) {
-    for (let x = 0; x < gridWidth; x++) {
-      let sum = 0;
-      kernel.forEach(({ x: kx, y: ky, value }) => {
-        const ix = x + kx;
-        const iy = y + ky;
-        if (ix >= 0 && ix < gridWidth && iy >= 0 && iy < gridHeight) {
-          sum += grid[iy][ix] * value;
-        }
-      });
-      blurredGrid[y][x] = sum / kernelSum;
-    }
-  }
-
-  return blurredGrid;
-}
-
-function getCoordinatesFromCircles(circles) {
-  return circles._groups[0].map((circle) => {
-    const cx = circle.getAttribute("cx");
-    const cy = circle.getAttribute("cy");
-    return { x: parseFloat(cx), y: parseFloat(cy) };
-  });
 }
 
 function initializeTooltips() {
@@ -789,7 +611,7 @@ function changeCluster(e) {
     return;
   }
 
-  let selectedCircle = board["circles"].filter(function (circle) {
+  let selectedCircle = board.circles.filter(function (circle) {
     // The keyPath field can be a number (e.g. an autoincrement id) while
     // clickedCircleValue is always a string from the <select>'s .val();
     // loose equality intentionally matches "5" to 5.
@@ -926,10 +748,10 @@ async function init() {
   $(document).on("change", "#titleSelect", function () {
     config.labels.title = $("#titleSelect option:selected").val();
 
-    if (!board["labels"]) {
+    if (!board.labels) {
       return;
     }
-    board["labels"].attr("opacity", 0);
+    board.labels.attr("opacity", 0);
     board?.labels?.filter((d) => d.center).text((d) => d[config.labels.title]);
     board?.circles.attr("data-bs-toggle", "tooltip");
 
