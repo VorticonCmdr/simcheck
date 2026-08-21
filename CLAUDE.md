@@ -6,17 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 simcheck is a Chrome extension (Manifest V3) that generates, compares, and visualizes vector embeddings — an accessible entry point into embeddings for uses beyond RAG, not a production-ready product. It runs entirely client-side: embeddings are generated locally via [transformers.js](https://github.com/xenova/transformers.js) (ONNX/WASM), stored in IndexedDB, and explored through clustering (UMAP + hierarchical/DBSCAN) and a 2D map view (d3 + a custom HNSW index).
 
-There is **no build system**: no `package.json`, no bundler, no linter/formatter config, and no test suite. All source is plain ES modules loaded directly by the browser, and every third-party library is vendored (checked into `libs/`/`css/` with version-suffixed filenames, e.g. `bootstrap-table.min.v1.22.4.js`) rather than installed via npm.
+Builds with **Vite + npm**, via `@crxjs/vite-plugin` (MV3-aware bundling). There's still no test suite or linter — verification is manual, in the browser. Not every dependency is npm-managed, though: see [Conventions](#conventions) for which libraries are real npm packages vs. still hand-vendored, and why.
 
 ## Development workflow
 
-Since there's no build step, development is edit-and-reload against an unpacked extension:
-
-1. Load it: `chrome://extensions` → enable **Developer mode** → **Load unpacked** → select the repo root (where `manifest.json` lives).
-2. After editing any file, click the reload icon for the extension on `chrome://extensions`. Background service worker changes need this too — MV3 workers can go idle/stale, so a full reload (not just refreshing a page) ensures `js/background.js` re-runs `init()`.
-3. Already-open extension tabs (`import.html`, `map.html`, etc.) need a manual page refresh after a reload to pick up JS/HTML/CSS changes.
-4. Debugging: inspect `js/background.js` via the "service worker" link on `chrome://extensions`; debug page scripts (`import.js`, `map.js`, ...) via normal DevTools on the open extension tab.
-5. There is no automated lint/test/build command to run — verify changes manually in the browser.
+1. `npm install`.
+2. `npm run dev` — starts the Vite/crxjs dev server. Load `dist/` as an unpacked extension: `chrome://extensions` → enable **Developer mode** → **Load unpacked** → select `dist/`. Page-level changes hot-reload; a `js/background.js` edit triggers a full extension reload (MV3 service workers can't be hot-patched).
+3. `npm run build` — one-shot production build to `dist/` (also regenerates `templates/*.precompiled.js` first, via `build:templates`). Load the same way for a production-like smoke test.
+4. Debugging: inspect the background service worker via the "service worker" link on `chrome://extensions`; debug page scripts via normal DevTools on the open extension tab.
+5. There is no automated lint/test command — verify changes manually in the browser (`npm run build` + load-unpacked is the closest thing to a CI check this repo has).
 
 ## Architecture
 
@@ -57,7 +55,7 @@ Unhandled actions fall through to a `404` reply. A `chrome.alarms` entry (`"keep
 
 Module-level state held by the worker: `embeddingsExtractor` (the loaded transformers.js pipeline, or `null` in OpenAI mode), `hnsw` (in-memory index), the `settings` singleton from `js/settings.js`, and a `ports` map. No IndexedDB connection is cached — `js/indexeddb.js` helpers open/close per call. `chrome.storage.local["lastMessage"]` caches the last broadcast so a page that connects late (e.g. after a reload mid-import) can recover current status.
 
-transformers.js is loaded from `/libs/transformers.min.js` with `env.allowRemoteModels = true`, `env.allowLocalModels = false`, and WASM multithreading disabled (`numThreads = 1`, an onnxruntime-web workaround). The active model/task comes from `settings.pipeline` (default: `feature-extraction` / `sentence-transformers/all-MiniLM-L6-v2`).
+transformers.js is loaded from `/libs/transformers.min.js` (vendored, but bundled by Vite like regular source — see [Build system](#build-system-vite--npm)) with `env.allowRemoteModels = true`, `env.allowLocalModels = false`, WASM multithreading disabled (`numThreads = 1`, an onnxruntime-web workaround), and `env.backends.onnx.wasm.wasmPaths = "/libs/"` pinning the `.wasm` binary lookup to their `public/libs/` passthrough location (decoupled from wherever Vite places the bundled `transformers.min.js` chunk itself). The active model/task comes from `settings.pipeline` (default: `feature-extraction` / `sentence-transformers/all-MiniLM-L6-v2`).
 
 ### Storage layer (`js/indexeddb.js`, `js/settings.js`)
 
@@ -80,7 +78,7 @@ Progress during import is shown via `js/progress.js`'s `setProgressbar`, fed bot
 
 `map.js` is a pure *consumer* — it does **not** run UMAP or clustering itself. It reads rows straight from IndexedDB expecting them to already carry `coordinates: [x, y]` and `dbscanCluster` (written upstream by the clustering pages), builds d3 linear scales from `d3.extent()`, and renders labels/circles with standard d3 `.data().join()`. Pan/zoom uses `d3.zoom()`, rectangle multi-select uses `d3.brush()`.
 
-For fast viewport queries and label-overlap avoidance it builds **two [Flatbush](https://github.com/mourner/flatbush) R-tree indices** (`libs/flatbush.js`) — one over circle positions, one over label bounding boxes. This is easy to confuse with the HNSW index used elsewhere: **map.js uses Flatbush, not HNSW**; HNSW (`libs/hnsw.js`) is only used by `js/background.js` for embedding similarity search. Coupling between `map.js` and the clustering pages is entirely implicit, through shared IndexedDB fields (`coordinates`, `dbscanCluster`, `center`) — there are no direct imports between them. Handlebars precompiled templates (`templates/*.precompiled.js`) render the color-rule list and the related-items accordion.
+For fast viewport queries and label-overlap avoidance it builds **two [Flatbush](https://github.com/mourner/flatbush) R-tree indices** (`libs/flatbush.js`) — one over circle positions, one over label bounding boxes. This is easy to confuse with the HNSW index used elsewhere: **map.js uses Flatbush, not HNSW**; HNSW (`libs/hnsw.js`) is only used by `js/background.js` for embedding similarity search. Coupling between `map.js` and the clustering pages is entirely implicit, through shared IndexedDB fields (`coordinates`, `dbscanCluster`, `center`) — there are no direct imports between them. Handlebars precompiled templates (`public/templates/*.precompiled.js`, auto-regenerated from `templates/*.handlebars` — see [Build system](#build-system-vite--npm)) render the color-rule list and the related-items accordion.
 
 ### Clustering — several similarly named files, not all of them live
 
@@ -91,10 +89,10 @@ This area has accumulated parallel/experimental implementations. Check this tabl
 | `js/cluster.js` | **Live** | loaded by `html/cluster.html` | Full page controller: UMAP projection + DBSCAN + spawns `hclust-worker.js` for hierarchical clustering |
 | `js/clusterNew.js` | **Dead / orphaned** | nothing references it (no HTML, no imports) | Same UI as `cluster.js` but routes hierarchical clustering through the background port instead of a Worker — looks like an abandoned migration attempt, not currently reachable |
 | `js/clustering.js` | **Live** | imported by `js/background.js` (`processClusterData` action) | Pure hierarchical-clustering engine (no UMAP/DBSCAN), runs in the background service worker |
-| `js/hclust-worker.js` | **Live** | `new Worker(...)`, spawned only by `js/cluster.js` | Web Worker running a hand-rolled agglomerative clustering algorithm (near-duplicate logic of `js/clustering.js`) |
+| `public/js/hclust-worker.js` | **Live** | `new Worker("/js/hclust-worker.js")`, spawned only by `js/cluster.js` | Web Worker running a hand-rolled agglomerative clustering algorithm (near-duplicate logic of `js/clustering.js`) |
 | `libs/hclust.js` / `libs/hclust.min.js` | **Dead** | unreferenced anywhere | Vendored hierarchical-clustering library that the hand-rolled implementations in `clustering.js`/`hclust-worker.js` replaced but never removed |
 
-If you're asked to change hierarchical clustering behavior, the two places that matter are `js/clustering.js` (background-routed) and `js/hclust-worker.js` (Worker-routed, used by the live `cluster.js` page) — they currently duplicate logic rather than sharing it.
+If you're asked to change hierarchical clustering behavior, the two places that matter are `js/clustering.js` (background-routed) and `public/js/hclust-worker.js` (Worker-routed, used by the live `cluster.js` page) — they currently duplicate logic rather than sharing it. `hclust-worker.js` lives under `public/` rather than `js/` because it's instantiated via a runtime string (`new Worker("/js/hclust-worker.js")`), which the Vite build can't statically discover the way it discovers `import`ed modules — see [Build system](#build-system-vite--npm) below.
 
 ### Vendored algorithm libraries (`libs/`)
 
@@ -108,6 +106,14 @@ If you're asked to change hierarchical clustering behavior, the two places that 
 
 Don't assume every file in `libs/` is active — `sbq.js` and `hclust.js`/`hclust.min.js` above are vendored-but-unused.
 
+### Build system (Vite + npm)
+
+`vite.config.js` uses `@crxjs/vite-plugin`'s `crx({ manifest })` (fed `manifest.json` directly — crxjs never touches its CSP, in dev or build) plus `vite-plugin-static-copy` for the two libraries that need npm version tracking but must stay classic global-namespace `<script>` tags (see the jQuery/select2 row in the [Conventions](#conventions) table below). Two things aren't auto-discoverable by Vite's static analysis and need explicit `build.rollupOptions.input` entries in `vite.config.js`: `html/import.html`, `html/cluster.html`, and `html/map.html` (none are referenced by any manifest key — `options.html` *is*, via `options_page`, so it's auto-discovered). `resolve.alias` maps `/js/`, `/libs/`, `/css/`, `/templates/` to their source directories so the codebase's existing absolute-path `import` convention keeps working unchanged.
+
+**`public/` holds everything that must ship byte-identical and untouched** by Vite's module graph: the `ort-wasm*.wasm` binaries (fetched at runtime by transformers.js itself, never `import`ed — see above), the `bootstrap-table`/`tableExport` family (classic scripts depending on a pre-existing `window.jQuery` global), the Handlebars runtime + precompiled templates (same classic-script/global constraint), the manifest's `icons/`, and `public/js/hclust-worker.js` (see the clustering table above for why). Anything placed there is copied straight through to the matching path under `dist/`.
+
+`scripts/build-templates.js` (run via `npm run build:templates`, wired as a `predev`/pre-`build` step) shells out to the `handlebars` npm package's CLI to regenerate `public/templates/*.precompiled.js` from `templates/*.handlebars` — this replaced a manual "run the handlebars CLI yourself" step.
+
 ### UI helper modules
 
 - `js/table.js`: wires up `bootstrap-table`, building columns dynamically from whatever data array is handed to `generateTable()` (not an internal fetch); exposes CSV/JSONL export and "compare selected rows" as custom DOM events other pages listen for, not direct function calls.
@@ -116,7 +122,14 @@ Don't assume every file in `libs/` is active — `sbq.js` and `hclust.js`/`hclus
 
 ## Conventions
 
-- **Absolute-path ES module imports.** Code imports other project files by absolute path (e.g. `import { HNSW } from "/libs/hnsw.js"`, `import { getAllData } from "/js/indexeddb.js"`), which resolves against the extension root at `chrome-extension://<id>/`. Keep new imports absolute in this same style.
-- **Handlebars templates are hand-precompiled.** `templates/*.handlebars` source files are not fetched or compiled at runtime — only `templates/*.precompiled.js` is loaded (by `map.js`, via `Handlebars.templates.<name>`). If you edit a `.handlebars` file, you must regenerate the matching `.precompiled.js` yourself (e.g. via the `handlebars` CLI) since no build tool does this automatically.
-- **Vendoring, not npm.** Upgrading a third-party library means downloading the new version and replacing the version-suffixed file in `libs/`/`css/`, then updating the `<script>`/`<link>` reference(s) in the relevant `html/*.html` file(s).
-- **CSP requires `wasm-unsafe-eval`** (`manifest.json`, for onnxruntime-web WASM used by transformers.js) — keep this in mind if adding new script sources or inline scripts, which the CSP (`script-src 'self' 'wasm-unsafe-eval'`) would otherwise block.
+- **Absolute-path ES module imports.** Code imports other project files by absolute path (e.g. `import { HNSW } from "/libs/hnsw.js"`, `import { getAllData } from "/js/indexeddb.js"`). Under Vite this is resolved via explicit `resolve.alias` entries in `vite.config.js` (not Vite's native root-relative resolution, to sidestep known Rollup edge cases) — keep new same-project imports absolute in this same style.
+- **Not every dependency is npm-managed — three tiers, by why:**
+  | Tier | Libraries | How it's loaded | Why |
+  |---|---|---|---|
+  | Real npm import | `d3`, `umap-js`, `papaparse`, `sortablejs`, `bootstrap` (+`@popperjs/core`), `bootstrap-icons` | `import` in the relevant `js/*.js` page module | No classic script depends on them as a global — clean module-graph migration. Upgrading is `npm update`. |
+  | npm-managed, classic-script delivery | `jquery`, `select2` | `vite-plugin-static-copy` copies `node_modules/.../dist/*.min.js` to `public`-equivalent build output at the same `/libs/` path the HTML `<script>` tags reference (see `vite.config.js`) | `bootstrap-table` (next tier) needs `window.jQuery` present *before* it runs, and `<script type="module">` execution is always deferred until after classic scripts — so these can't be ES-imported into the module graph. Still real `package.json` dependencies; only the delivery mechanism is a copy, not a bundle. |
+  | Fully vendored (hand-downloaded, version-suffixed filenames) | `bootstrap-table`/`tableExport` family, `handlebars.runtime` | classic `<script>`, source lives in `public/` (byte-identical passthrough) | Genuinely third-party, no npm migration attempted (specific export-plugin wiring / precompiled-template coupling not worth the risk). Upgrading means downloading the new version and replacing the file in `public/libs/`, `public/css/`, or `public/templates/`. |
+
+  `transformers.min.js` and the small project-authored `libs/` algorithm files (`hnsw.js`, `dbscan.js`, `similarity.js`, `pqueue.js`, `node.js`, `flatbush.js`, `flatqueue.js`) are also vendored, but live in `libs/` (not `public/`) and get bundled by Vite like normal source, since they're consumed via genuine `import` statements rather than classic `<script>` tags.
+- **Handlebars templates are build-precompiled, not hand-precompiled.** `templates/*.handlebars` source files are compiled to `public/templates/*.precompiled.js` by `npm run build:templates` (`scripts/build-templates.js`), wired into both `npm run dev` and `npm run build` — see [Build system](#build-system-vite--npm). Editing a `.handlebars` file no longer requires a manual CLI step.
+- **CSP requires `wasm-unsafe-eval`** (`manifest.json`, for onnxruntime-web WASM used by transformers.js) — keep this in mind if adding new script sources or inline scripts, which the CSP (`script-src 'self' 'wasm-unsafe-eval'`) would otherwise block. `@crxjs/vite-plugin` doesn't modify this CSP in either dev or build.

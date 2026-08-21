@@ -1,10 +1,16 @@
+import "bootstrap/dist/css/bootstrap.min.css";
+import "bootstrap-icons/font/bootstrap-icons.css";
+import "select2/dist/css/select2.min.css";
+import "bootstrap";
+import Sortable from "sortablejs";
+import { UMAP } from "umap-js";
+
 import { settings, initializeSettings } from "/js/settings.js";
 import { saveData, getAllData } from "/js/indexeddb.js";
 import { setProgressbar } from "/js/progress.js";
 
 import { DBSCAN } from "/libs/dbscan.js";
 
-import "/libs/umap-js.min.js";
 import { cos_sim } from "/libs/transformers.min.js";
 const invertedCosineSimilarity = (vecA, vecB) => {
   return 1 - cos_sim(vecA, vecB);

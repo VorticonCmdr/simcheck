@@ -44,6 +44,10 @@ env.allowLocalModels = false;
 // Due to a bug in onnxruntime-web, we must disable multithreading for now.
 // See https://github.com/microsoft/onnxruntime/issues/14445 for more information.
 env.backends.onnx.wasm.numThreads = 1;
+// Pin the WASM binaries to their public/libs/ passthrough path -- transformers.min.js
+// itself is bundled by Vite (its output location/filename can vary), so the WASM
+// lookup can't rely on a fixed path relative to that bundle.
+env.backends.onnx.wasm.wasmPaths = "/libs/";
 
 let embeddingsExtractor = null;
 

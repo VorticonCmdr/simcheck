@@ -1,6 +1,10 @@
+import "bootstrap/dist/css/bootstrap.min.css";
+import "bootstrap-icons/font/bootstrap-icons.css";
+import * as bootstrap from "bootstrap";
+import * as d3 from "d3";
+
 import { settings, initializeSettings } from "/js/settings.js";
 
-import "/libs/d3.min.v7.9.0.js";
 import { firstEntry, openDatabase } from "/js/indexeddb.js";
 import { generateTable } from "/js/table.js";
 

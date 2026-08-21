@@ -1,3 +1,10 @@
+import "bootstrap/dist/css/bootstrap.min.css";
+import "bootstrap-icons/font/bootstrap-icons.css";
+import "select2/dist/css/select2.min.css";
+import * as bootstrap from "bootstrap";
+import Papa from "papaparse";
+import Sortable from "sortablejs";
+
 import { settings, getSettings, setSettings } from "/js/settings.js";
 import {
   getAllKeys,

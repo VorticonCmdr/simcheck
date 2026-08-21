@@ -1,0 +1,30 @@
+{
+  "name": "simcheck",
+  "version": "0.0.3",
+  "private": true,
+  "type": "module",
+  "description": "a chrome extension to generate, compare and visualize vector embeddings",
+  "scripts": {
+    "predev": "npm run build:templates",
+    "dev": "vite",
+    "build:templates": "node scripts/build-templates.js",
+    "build": "npm run build:templates && vite build"
+  },
+  "dependencies": {
+    "@popperjs/core": "^2.11.8",
+    "bootstrap": "^5.3.8",
+    "bootstrap-icons": "^1.13.1",
+    "d3": "^7.9.0",
+    "jquery": "^3.7.1",
+    "papaparse": "^5.6.0",
+    "select2": "^4.0.13",
+    "sortablejs": "^1.15.7",
+    "umap-js": "^1.4.0"
+  },
+  "devDependencies": {
+    "@crxjs/vite-plugin": "^2.7.1",
+    "handlebars": "^4.7.9",
+    "vite": "^8.2.2",
+    "vite-plugin-static-copy": "^4.1.1"
+  }
+}
