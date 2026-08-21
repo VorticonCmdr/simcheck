@@ -1,255 +1,239 @@
 <!doctype html>
 <html lang="en">
-    <head>
-        <meta charset="utf-8" />
-        <meta
-            name="viewport"
-            content="width=device-width, initial-scale=1, user-scalable=0"
-        />
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, user-scalable=0"
+    />
 
-        <title>map | simcheck</title>
+    <title>map | simcheck</title>
 
-        <link rel="stylesheet" href="/css/bootstrap-table.min.v1.22.4.css" />
-        <style>
-            .multicolor-button {
-                background: linear-gradient(
-                    45deg,
-                    #4285f4 25%,
-                    #ea4335 25%,
-                    #ea4335 50%,
-                    #fbbc05 50%,
-                    #fbbc05 75%,
-                    #34a853 75%
-                );
-                color: white;
-                border: none;
-                padding: 10px 20px;
-                font-size: 16px;
-                cursor: pointer;
-                transition: transform 0.3s ease;
-            }
+    <link rel="stylesheet" href="/css/bootstrap-table.min.v1.22.4.css" />
+    <style>
+      .multicolor-button {
+        background: linear-gradient(
+          45deg,
+          #4285f4 25%,
+          #ea4335 25%,
+          #ea4335 50%,
+          #fbbc05 50%,
+          #fbbc05 75%,
+          #34a853 75%
+        );
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        font-size: 16px;
+        cursor: pointer;
+        transition: transform 0.3s ease;
+      }
 
-            .btn:hover {
-                transform: scale(1.05);
-            }
-        </style>
-    </head>
+      .btn:hover {
+        transform: scale(1.05);
+      }
+    </style>
+  </head>
 
-    <body style="background-color: #ebeff7; overflow: hidden">
-        <div
-            id="board"
-            class="position-absolute w-100 h-100"
-            style="z-index: 0"
-        >
-            <svg id="map"></svg>
-        </div>
-        <div class="container-fluid">
-            <button
-                id="menuBtn"
-                style="z-index: 3"
-                class="btn btn-link position-absolute z-3 mx-2 my-2 fs-3"
-                type="button"
-                data-bs-toggle="offcanvas"
-                data-bs-target="#offcanvasMenu"
+  <body style="background-color: #ebeff7; overflow: hidden">
+    <div id="board" class="position-absolute w-100 h-100" style="z-index: 0">
+      <svg id="map"></svg>
+    </div>
+    <div class="container-fluid">
+      <button
+        id="menuBtn"
+        style="z-index: 3"
+        class="btn btn-link position-absolute z-3 mx-2 my-2 fs-3"
+        type="button"
+        data-bs-toggle="offcanvas"
+        data-bs-target="#offcanvasMenu"
+      >
+        <i class="bi bi-sliders"></i>
+      </button>
+    </div>
+
+    <div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasMenu">
+      <div class="offcanvas-header pb-0">
+        <h5 id="offcanvasTopLabel">menu</h5>
+        <button
+          type="button"
+          class="btn-close text-reset"
+          data-bs-dismiss="offcanvas"
+          aria-label="Close"
+        ></button>
+      </div>
+      <div class="offcanvas-body pt-0">
+        <ul class="nav nav-underline mb-2">
+          <li class="nav-item">
+            <a class="nav-link" href="/html/import.html">Import</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="/html/cluster.html">Cluster</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link active" href="/html/map.html">Map</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="/html/options.html">Options</a>
+          </li>
+          <li class="nav-item">
+            <a
+              class="nav-link"
+              href="https://docs.google.com/document/d/1wnIekRglMEkagw6dsucxNRkHclpQE_ptwkIyXzNvQ1s/"
+              >Help</a
             >
-                <i class="bi bi-sliders"></i>
+          </li>
+        </ul>
+        <div class="d-grid mb-2">
+          <div class="form-floating">
+            <select class="form-select" id="objectStoreSelect"></select>
+            <label for="objectStoreSelect">select</label>
+          </div>
+          <div class="form-floating">
+            <select id="titleSelect" class="form-select"></select>
+            <label for="titleSelect">select label title</label>
+          </div>
+          <div class="form-floating">
+            <select id="descriptionSelect" class="form-select"></select>
+            <label for="descriptionSelect">select description</label>
+          </div>
+          <button
+            id="regenerateMap"
+            type="button"
+            class="btn btn-info"
+            data-bs-dismiss="offcanvas"
+          >
+            (re)generate map
+          </button>
+        </div>
+        <div class="d-grid mb-2">
+          <button
+            id="resetZoom"
+            type="button"
+            class="btn btn-primary"
+            data-bs-dismiss="offcanvas"
+          >
+            reset zoom
+          </button>
+        </div>
+        <div class="input-group mb-2">
+          <div class="form-floating">
+            <select id="clusterSelect" class="form-select"></select>
+            <label for="clusterSelect">select cluster</label>
+          </div>
+        </div>
+        <div class="d-grid mb-2">
+          <button
+            id="autoColorClusters"
+            type="button"
+            class="btn multicolor-button"
+            data-bs-dismiss="offcanvas"
+          >
+            auto colorize data
+          </button>
+        </div>
+        <div class="input-group mb-1">
+          <input
+            type="text"
+            class="form-control w-25"
+            placeholder="regex"
+            id="attrRegex"
+          />
+          <select id="colorFields" class="form-select w-25"></select>
+          <input
+            type="color"
+            class="form-control form-control-color"
+            id="attrRegexColor"
+            value="#E20074"
+            title="Choose your color"
+          />
+          <button
+            class="btn btn-outline-success"
+            type="button"
+            id="urlRegexBtn"
+          >
+            <i class="bi bi-plus-lg"></i>
+          </button>
+        </div>
+        <ul id="coloring" class="d-grid list-group mb-2"></ul>
+      </div>
+    </div>
+
+    <div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasRight">
+      <div class="offcanvas-header">
+        <h5 class="offcanvas-title">
+          cluster: <span id="offcanvasRightLabel"></span>
+        </h5>
+
+        <button
+          id="closeRelated"
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="offcanvas"
+        ></button>
+      </div>
+      <div class="offcanvas-body">
+        <div class="d-grid mb-2">
+          <button
+            id="tableRelated"
+            type="button"
+            class="btn btn-primary"
+            data-bs-toggle="modal"
+            data-bs-target="#tableModal"
+          >
+            <i class="bi bi-table me-2"></i>show all data
+          </button>
+        </div>
+        <div class="accordion" id="accordionRelated"></div>
+      </div>
+    </div>
+
+    <div
+      class="modal fade"
+      id="tableModal"
+      data-bs-backdrop="static"
+      data-bs-keyboard="false"
+      tabindex="-1"
+    >
+      <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h1 class="modal-title fs-5" id="staticBackdropLabel">
+              Modal title
+            </h1>
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+              aria-label="Close"
+            ></button>
+          </div>
+          <div class="modal-body">
+            <table id="dataTable"></table>
+          </div>
+          <div class="modal-footer">
+            <button
+              type="button"
+              class="btn btn-secondary"
+              data-bs-dismiss="modal"
+            >
+              Close
             </button>
+          </div>
         </div>
+      </div>
+    </div>
 
-        <div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasMenu">
-            <div class="offcanvas-header pb-0">
-                <h5 id="offcanvasTopLabel">menu</h5>
-                <button
-                    type="button"
-                    class="btn-close text-reset"
-                    data-bs-dismiss="offcanvas"
-                    aria-label="Close"
-                ></button>
-            </div>
-            <div class="offcanvas-body pt-0">
-                <ul class="nav nav-underline mb-2">
-                    <li class="nav-item">
-                        <a class="nav-link" href="/html/import.html">Import</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/html/cluster.html"
-                            >Cluster</a
-                        >
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link active" href="/html/map.html">Map</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/html/options.html"
-                            >Options</a
-                        >
-                    </li>
-                    <li class="nav-item">
-                        <a
-                            class="nav-link"
-                            href="https://docs.google.com/document/d/1wnIekRglMEkagw6dsucxNRkHclpQE_ptwkIyXzNvQ1s/"
-                            >Help</a
-                        >
-                    </li>
-                </ul>
-                <div class="d-grid mb-2">
-                    <div class="form-floating">
-                        <select
-                            class="form-select"
-                            id="objectStoreSelect"
-                        ></select>
-                        <label for="objectStoreSelect">select</label>
-                    </div>
-                    <div class="form-floating">
-                        <select id="titleSelect" class="form-select"></select>
-                        <label for="titleSelect">select label title</label>
-                    </div>
-                    <div class="form-floating">
-                        <select
-                            id="descriptionSelect"
-                            class="form-select"
-                        ></select>
-                        <label for="descriptionSelect"
-                            >select description</label
-                        >
-                    </div>
-                    <button
-                        id="regenerateMap"
-                        type="button"
-                        class="btn btn-info"
-                        data-bs-dismiss="offcanvas"
-                    >
-                        (re)generate map
-                    </button>
-                </div>
-                <div class="d-grid mb-2">
-                    <button
-                        id="resetZoom"
-                        type="button"
-                        class="btn btn-primary"
-                        data-bs-dismiss="offcanvas"
-                    >
-                        reset zoom
-                    </button>
-                </div>
-                <div class="input-group mb-2">
-                    <div class="form-floating">
-                        <select id="clusterSelect" class="form-select"></select>
-                        <label for="clusterSelect">select cluster</label>
-                    </div>
-                </div>
-                <div class="d-grid mb-2">
-                    <button
-                        id="autoColorClusters"
-                        type="button"
-                        class="btn multicolor-button"
-                        data-bs-dismiss="offcanvas"
-                    >
-                        auto colorize data
-                    </button>
-                </div>
-                <div class="input-group mb-1">
-                    <input
-                        type="text"
-                        class="form-control w-25"
-                        placeholder="regex"
-                        id="attrRegex"
-                    />
-                    <select id="colorFields" class="form-select w-25"></select>
-                    <input
-                        type="color"
-                        class="form-control form-control-color"
-                        id="attrRegexColor"
-                        value="#E20074"
-                        title="Choose your color"
-                    />
-                    <button
-                        class="btn btn-outline-success"
-                        type="button"
-                        id="urlRegexBtn"
-                    >
-                        <i class="bi bi-plus-lg"></i>
-                    </button>
-                </div>
-                <ul id="coloring" class="d-grid list-group mb-2"></ul>
-            </div>
-        </div>
+    <script src="/libs/jquery.min.js"></script>
 
-        <div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasRight">
-            <div class="offcanvas-header">
-                <h5 class="offcanvas-title">
-                    cluster: <span id="offcanvasRightLabel"></span>
-                </h5>
+    <script src="/libs/handlebars.runtime.min.v4.7.8.js"></script>
+    <script src="/templates/accordionItem.precompiled.js"></script>
+    <script src="/templates/coloring.precompiled.js"></script>
 
-                <button
-                    id="closeRelated"
-                    type="button"
-                    class="btn-close"
-                    data-bs-dismiss="offcanvas"
-                ></button>
-            </div>
-            <div class="offcanvas-body">
-                <div class="d-grid mb-2">
-                    <button
-                        id="tableRelated"
-                        type="button"
-                        class="btn btn-primary"
-                        data-bs-toggle="modal"
-                        data-bs-target="#tableModal"
-                    >
-                        <i class="bi bi-table me-2"></i>show all data
-                    </button>
-                </div>
-                <div class="accordion" id="accordionRelated"></div>
-            </div>
-        </div>
+    <script src="/libs/bootstrap-table.min.v1.22.4.js"></script>
+    <script src="/libs/tableExport.min.v1.27.0.js"></script>
+    <script src="/libs/bootstrap-table-export.min.v1.22.4.js"></script>
 
-        <div
-            class="modal fade"
-            id="tableModal"
-            data-bs-backdrop="static"
-            data-bs-keyboard="false"
-            tabindex="-1"
-        >
-            <div class="modal-dialog modal-xl modal-dialog-scrollable">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h1 class="modal-title fs-5" id="staticBackdropLabel">
-                            Modal title
-                        </h1>
-                        <button
-                            type="button"
-                            class="btn-close"
-                            data-bs-dismiss="modal"
-                            aria-label="Close"
-                        ></button>
-                    </div>
-                    <div class="modal-body">
-                        <table id="dataTable"></table>
-                    </div>
-                    <div class="modal-footer">
-                        <button
-                            type="button"
-                            class="btn btn-secondary"
-                            data-bs-dismiss="modal"
-                        >
-                            Close
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <script src="/libs/jquery.min.js"></script>
-
-        <script src="/libs/handlebars.runtime.min.v4.7.8.js"></script>
-        <script src="/templates/accordionItem.precompiled.js"></script>
-        <script src="/templates/coloring.precompiled.js"></script>
-
-        <script src="/libs/bootstrap-table.min.v1.22.4.js"></script>
-        <script src="/libs/tableExport.min.v1.27.0.js"></script>
-        <script src="/libs/bootstrap-table-export.min.v1.22.4.js"></script>
-
-        <script type="module" src="/js/map.js"></script>
-    </body>
+    <script type="module" src="/js/map.js"></script>
+  </body>
 </html>

@@ -1,0 +1,15 @@
+# Vendored/generated output -- keep in sync with eslint.config.js's ignores.
+dist/
+node_modules/
+libs/transformers.min.js
+public/css/
+public/icons/
+public/libs/
+public/templates/
+
+# Prettier has no built-in Handlebars parser; it misparses these as plain
+# HTML (silently mangling coloring.handlebars, hard syntax error on
+# accordionItem.handlebars's {{#if}} inside an attribute).
+templates/*.handlebars
+
+package-lock.json

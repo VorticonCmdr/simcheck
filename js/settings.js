@@ -56,7 +56,7 @@ async function initializeSettings() {
 }
 
 function handleStorageChange(changes, namespace) {
-  for (let [key, { oldValue, newValue }] of Object.entries(changes)) {
+  for (let [key, { newValue }] of Object.entries(changes)) {
     switch (key) {
       case "settings":
         settings = newValue;

@@ -8,7 +8,9 @@
     "predev": "npm run build:templates",
     "dev": "vite",
     "build:templates": "node scripts/build-templates.js",
-    "build": "npm run build:templates && vite build"
+    "build": "npm run build:templates && vite build",
+    "lint": "eslint .",
+    "format": "prettier --write ."
   },
   "dependencies": {
     "@popperjs/core": "^2.11.8",
@@ -23,7 +25,11 @@
   },
   "devDependencies": {
     "@crxjs/vite-plugin": "^2.7.1",
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.8.1",
+    "globals": "^17.11.0",
     "handlebars": "^4.7.9",
+    "prettier": "^3.9.6",
     "vite": "^8.2.2",
     "vite-plugin-static-copy": "^4.1.1"
   }

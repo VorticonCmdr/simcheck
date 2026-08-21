@@ -6,7 +6,7 @@ import Papa from "papaparse";
 import Sortable from "sortablejs";
 
 import { notifyError } from "/js/notify.js";
-import { settings, getSettings, setSettings } from "/js/settings.js";
+import { settings, setSettings } from "/js/settings.js";
 import {
   getAllKeys,
   getObjectStoreNamesAndMeta,
@@ -21,8 +21,6 @@ let selectedFields = [];
 let sortable;
 let row1 = {};
 let csvData = [];
-let db;
-let textPrefix = "";
 
 const $embeddingsFields = $("#embeddingsFields");
 const $generateEmbeddings = $("#generateEmbeddings");
@@ -185,7 +183,7 @@ function readActivities(file) {
   }
 
   // Check if the file is an image.
-  if (file.type && file.type != "text/csv") {
+  if (file.type && file.type !== "text/csv") {
     console.log("File is not a csv file.", file.type, file);
     return;
   }
@@ -243,7 +241,7 @@ async function handleIndexedDB() {
 
   let tableSelectHtml = objectStores
     .map((objectStore) => {
-      return `<option value="${objectStore.name}" ${settings.indexedDB.tableName == objectStore.name ? "selected" : ""}>${objectStore.name}</option>`;
+      return `<option value="${objectStore.name}" ${settings.indexedDB.tableName === objectStore.name ? "selected" : ""}>${objectStore.name}</option>`;
     })
     .join("\n");
   $("#tableSelect").html(
@@ -376,12 +374,7 @@ async function init() {
       status: "save table",
       name: settings.indexedDB.tableName,
     });
-    let result = await saveData(
-      settings.indexedDB,
-      csvData,
-      keysSet,
-      setProgressbar,
-    );
+    await saveData(settings.indexedDB, csvData, keysSet, setProgressbar);
 
     let isChecked = $("#keepEmbeddings").is(":checked");
     simcheckPort.postMessage({

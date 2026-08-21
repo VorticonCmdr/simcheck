@@ -5,7 +5,10 @@ import { readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const rootDir = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+);
 const templatesDir = path.join(rootDir, "templates");
 const outDir = path.join(rootDir, "public", "templates");
 const handlebarsBin = path.join(rootDir, "node_modules", ".bin", "handlebars");

@@ -24,7 +24,7 @@ const simcheckPort = new PortConnector({
 async function messageHandler(message) {
   switch (message.type) {
     case "loading":
-      if (message.task == "done") {
+      if (message.task === "done") {
         window.location.reload();
       }
       setProgressbar(message);
@@ -86,7 +86,7 @@ async function getCachedOnnx() {
   const cache = await caches.open("transformers-cache");
   const requests = await cache.keys();
 
-  const extractKey = (url) => url.match(/huggingface\.co\/([^\/]+\/[^\/]+)/)?.[1];
+  const extractKey = (url) => url.match(/huggingface\.co\/([^/]+\/[^/]+)/)?.[1];
 
   const aggregated = await requests.reduce(async (accPromise, request) => {
     const acc = await accPromise;
@@ -156,7 +156,7 @@ async function generateModelsTable() {
   let html = Object.values(models)
     .map((model, i) => {
       let classes = "";
-      if (model.name == settings.pipeline.model) {
+      if (model.name === settings.pipeline.model) {
         classes = "table-primary";
       }
       return `<tr data-model="${model.name}" class="${classes}">
@@ -179,7 +179,7 @@ async function generateObjectStoresTable() {
   let html = objectStoreNamesAndSizes
     .map((objectStore, i) => {
       let classes = "";
-      if (objectStore.name == settings.indexedDB.tableName) {
+      if (objectStore.name === settings.indexedDB.tableName) {
         classes = "table-primary";
       }
       return `<tr data-name="${objectStore.name}" class="${classes}">
@@ -361,7 +361,7 @@ async function init() {
   });
 
   chrome.notifications.getPermissionLevel((level) => {
-    $("#permissionCheckDisabled").val(level == "granted" ? "on" : "off");
+    $("#permissionCheckDisabled").val(level === "granted" ? "on" : "off");
     $("#permissionText").text(level);
   });
 }

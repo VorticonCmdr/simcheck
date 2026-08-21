@@ -8,8 +8,6 @@ chrome.action.onClicked.addListener((tab) => {
 
 import { HNSW } from "/libs/hnsw.js";
 
-import { processClusterData } from "/js/clustering.js";
-
 chrome.alarms.create("keepAlive", { periodInMinutes: 0.5 }); // Trigger every 30 seconds
 
 function sendMessageAsync(message) {
@@ -80,7 +78,6 @@ import {
   getAllData,
   saveData,
   getDBkeypath,
-  getFilteredData,
 } from "/js/indexeddb.js";
 
 function getObjectStoreNames(databaseName) {
@@ -221,12 +218,7 @@ async function createEmbeddings(data) {
   }
 
   let keysSet = new Set();
-  let result = await saveData(
-    settings.indexedDB,
-    processedDocs,
-    keysSet,
-    sendMessage,
-  );
+  await saveData(settings.indexedDB, processedDocs, keysSet, sendMessage);
 
   sendMessage({
     type: "embeddings-stored",
@@ -406,12 +398,7 @@ async function createOpenAiEmbeddings(data) {
   }
 
   let keysSet = new Set();
-  let result = await saveData(
-    settings.indexedDB,
-    data.docs,
-    keysSet,
-    sendMessage,
-  );
+  await saveData(settings.indexedDB, data.docs, keysSet, sendMessage);
 
   sendMessage({
     type: "embeddings-stored",
@@ -492,7 +479,7 @@ function mergeObjects(obj1, obj2, suffix) {
   let result = { ...obj1 };
 
   for (let key in obj2) {
-    if (obj2.hasOwnProperty(key)) {
+    if (Object.prototype.hasOwnProperty.call(obj2, key)) {
       result[`${key}${suffix}`] = obj2[key];
     }
   }
@@ -537,7 +524,8 @@ async function searchDataHF(message) {
       const cursor = event.target.result;
       if (cursor) {
         let doc = cursor.value;
-        const vectorValue = doc["embeddings"]?.[message.settings.pipeline.model];
+        const vectorValue =
+          doc["embeddings"]?.[message.settings.pipeline.model];
 
         if (vectorValue?.length == queryVectorLength) {
           const similarity = cos_sim(vectorValue, queryVector);
@@ -697,12 +685,7 @@ async function generateHNSW(message) {
     });
 
     let keysSet = new Set();
-    let result = await saveData(
-      message.indexedDB,
-      tableData,
-      keysSet,
-      sendMessage,
-    );
+    await saveData(message.indexedDB, tableData, keysSet, sendMessage);
     //console.log(hnsw);
     return true;
   } catch (e) {
@@ -854,8 +837,6 @@ async function compareArrays(array1, array2, array2keyPath, key) {
 }
 
 async function compareStores(message) {
-  let resultData = [];
-
   const array1 = await getAllData({
     databaseName: settings.indexedDB.databaseName,
     tableName: message.store1,
@@ -891,7 +872,7 @@ async function compareStores(message) {
     console.log("datastore empty");
     return [];
   }
-  resultData = await compareArrays(
+  const resultData = await compareArrays(
     array1,
     array2,
     settings.indexedDB.keyPath,
@@ -971,7 +952,7 @@ chrome.runtime.onConnect.addListener(function (port) {
             status: "ready",
           });
           break;
-        case "restoreHNSW":
+        case "restoreHNSW": {
           let restoreHNSWresult = await restoreHNSW(message);
           sendMessage({
             type: "loading",
@@ -979,6 +960,7 @@ chrome.runtime.onConnect.addListener(function (port) {
             status: JSON.stringify(restoreHNSWresult),
           });
           break;
+        }
         case "generateHNSW":
           await generateHNSW(message);
           sendMessage({
@@ -987,20 +969,18 @@ chrome.runtime.onConnect.addListener(function (port) {
             status: "ready",
           });
           break;
-        case "searchHNSW":
+        case "searchHNSW": {
           let hnswSerpData = await searchHNSW(message);
           port.postMessage({
             type: "serp",
             result: hnswSerpData,
           });
           break;
-        case "processClusterData":
-          let clusters = await processClusterData(message.data, sendMessage);
-          break;
+        }
         case "createNotification":
           createNotification(message.text);
           break;
-        case "compareEmbeddings":
+        case "compareEmbeddings": {
           let compareTableData = compareEmbeddings(
             message.obj1,
             message.obj2,
@@ -1011,6 +991,7 @@ chrome.runtime.onConnect.addListener(function (port) {
             result: compareTableData,
           });
           break;
+        }
         case "ping":
           port.postMessage({
             type: "pong",
@@ -1019,20 +1000,22 @@ chrome.runtime.onConnect.addListener(function (port) {
         case "pong":
           // do nothing
           break;
-        case "compare":
+        case "compare": {
           let tableData = await compareStores(message);
           sendMessage({
             type: "serp",
             result: tableData,
           });
           break;
-        case "getNumberOfTokens":
+        }
+        case "getNumberOfTokens": {
           let size = await getNumberOfTokens(message.text);
           port.postMessage({
             type: "numberOfTokens",
             size: size,
           });
           break;
+        }
         case "getObjectStoreNames":
           try {
             let objectStores = await getObjectStoreNames(
@@ -1051,7 +1034,9 @@ chrome.runtime.onConnect.addListener(function (port) {
           }
           break;
         case "download":
-          let status = downloadModel(port, message.name);
+          // Fire-and-forget: downloadModel reports progress via sendMessage
+          // internally, so the handler doesn't need to await completion.
+          downloadModel(port, message.name);
           break;
         case "search":
           if (settings.pipeline.model.startsWith("openai")) {
@@ -1068,7 +1053,7 @@ chrome.runtime.onConnect.addListener(function (port) {
             });
           }
           break;
-        case "data-stored":
+        case "data-stored": {
           let storedTableData = await getAllData(message.indexedDB);
 
           if (message.keepEmbeddings) {
@@ -1101,6 +1086,7 @@ chrome.runtime.onConnect.addListener(function (port) {
             });
           }
           break;
+        }
         default:
           // not found
           port.postMessage({

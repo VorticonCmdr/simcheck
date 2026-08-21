@@ -19,7 +19,12 @@ const invertedCosineSimilarity = (vecA, vecB) => {
 
 import { generateTable } from "/js/table.js";
 
-const hclustWorker = new Worker("/js/hclust-worker.js");
+const hclustWorker = new Worker(
+  new URL("./hclust-worker.js", import.meta.url),
+  {
+    type: "module",
+  },
+);
 
 // Function to handle messages from the web worker
 hclustWorker.onmessage = function (e) {
@@ -129,7 +134,7 @@ async function processCluster(response) {
   settings.indexedDB.keyPath = response.request[0].keyPath;
 
   let reducedDimension = await reduceDimension(tableData);
-  if (tableData.length == reducedDimension.length) {
+  if (tableData.length === reducedDimension.length) {
     reducedDimension.forEach((coordinates, index) => {
       tableData[index]["coordinates"] = coordinates;
     });
@@ -137,7 +142,7 @@ async function processCluster(response) {
 
   let dbscan = new DBSCAN();
   const t0 = performance.now();
-  let clusters = dbscan.run(
+  dbscan.run(
     reducedDimension.map((arr) => {
       return {
         x: arr[0],
@@ -193,12 +198,7 @@ async function processCluster(response) {
   // empty keySet because we want to save all
   let keysSet = new Set();
 
-  let result = await saveData(
-    settings.indexedDB,
-    tableData,
-    keysSet,
-    setProgressbar,
-  );
+  await saveData(settings.indexedDB, tableData, keysSet, setProgressbar);
 }
 
 function generateLabels(tableData) {

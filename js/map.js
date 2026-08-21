@@ -114,7 +114,7 @@ function setupSelects() {
     })
     .reduce((accumulator, currentValue) => {
       let selected = "";
-      if (currentValue == config.labels.title) {
+      if (currentValue === config.labels.title) {
         selected = "selected";
       }
       return `${accumulator}\n<option value="${currentValue}" ${selected}>${currentValue}</option>`;
@@ -273,6 +273,9 @@ function colorClusters() {
   colors.forEach((color, i) => {
     board.circles
       .filter(function (d) {
+        // dbscanCluster can come back as a string from a DOM dataset in some
+        // code paths and a number here; loose equality is intentional.
+        // eslint-disable-next-line eqeqeq
         return d && d.dbscanCluster == i;
       })
       .attr("fill", color)
@@ -359,6 +362,9 @@ function centerNode(id) {
 
 function getCircleCoordinates(clickedCircle) {
   const selectedCircles = board["circles"].filter(function (circle) {
+    // See colorClusters() above: dbscanCluster's type isn't consistent
+    // across call sites, so loose equality is intentional here.
+    // eslint-disable-next-line eqeqeq
     if (circle.dbscanCluster == clickedCircle.dbscanCluster) {
       if (circle === clickedCircle) {
         circle.clicked = true;
@@ -388,6 +394,9 @@ function showCluster(clickedCircle) {
 
   let circles = board["circles"]
     .filter(function (circle) {
+      // See colorClusters() above: dbscanCluster's type isn't consistent
+      // across call sites, so loose equality is intentional here.
+      // eslint-disable-next-line eqeqeq
       if (circle.dbscanCluster == clickedCircle.dbscanCluster) {
         if (circle === clickedCircle) {
           circle.clicked = true;
@@ -425,12 +434,16 @@ function circleClick(pointerEvent, clickedCircle) {
 }
 
 function updateCircles(selectedCluster) {
+  // See colorClusters() above: dbscanCluster's type isn't consistent across
+  // call sites, so loose equality is intentional in this function.
   board["circles"]
+    // eslint-disable-next-line eqeqeq
     .filter((d) => d.dbscanCluster == selectedCluster)
     .attr("opacity", config.opacity.selected)
     .attr("stroke", "red");
 
   board["circles"]
+    // eslint-disable-next-line eqeqeq
     .filter((d) => d.dbscanCluster != selectedCluster)
     .attr("opacity", config.opacity.unselected)
     .attr("stroke", null);
@@ -550,10 +563,6 @@ async function generateMap() {
     .on("click", circleClick);
 
   //prepareBlurMap(board.circles, 2);
-
-  board["zoom"] = d3.zoom().on("zoom", (event) => {
-    svg.attr("transform", event.transform);
-  });
 
   board["zoom"] = d3
     .zoom()
@@ -776,11 +785,15 @@ function setupBoundingBoxes() {
 
 function changeCluster(e) {
   let clickedCircleValue = $("#clusterSelect option:selected").val();
-  if (clickedCircleValue == "") {
+  if (clickedCircleValue === "") {
     return;
   }
 
   let selectedCircle = board["circles"].filter(function (circle) {
+    // The keyPath field can be a number (e.g. an autoincrement id) while
+    // clickedCircleValue is always a string from the <select>'s .val();
+    // loose equality intentionally matches "5" to 5.
+    // eslint-disable-next-line eqeqeq
     return circle?.[settings.indexedDB.keyPath] == clickedCircleValue;
   });
 

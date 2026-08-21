@@ -1,153 +1,135 @@
 <!doctype html>
 <html lang="en">
-    <head>
-        <meta charset="utf-8" />
-        <meta
-            name="viewport"
-            content="width=device-width, initial-scale=1, user-scalable=0"
-        />
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, user-scalable=0"
+    />
 
-        <title>simcheck</title>
+    <title>simcheck</title>
 
-        <link rel="stylesheet" href="/css/bootstrap-table.min.v1.22.4.css" />
-    </head>
+    <link rel="stylesheet" href="/css/bootstrap-table.min.v1.22.4.css" />
+  </head>
 
-    <body style="background-color: #ebeff7">
-        <nav
-            class="navbar navbar-expand-lg bg-dark border-bottom border-body"
-            data-bs-theme="dark"
-        >
-            <div class="container-fluid">
-                <span class="navbar-brand" href="#">
-                    <img
-                        src="/icons/clusters.svg"
-                        alt="simcheck"
-                        width="24"
-                        height="24"
-                    />
-                </span>
+  <body style="background-color: #ebeff7">
+    <nav
+      class="navbar navbar-expand-lg bg-dark border-bottom border-body"
+      data-bs-theme="dark"
+    >
+      <div class="container-fluid">
+        <span class="navbar-brand" href="#">
+          <img
+            src="/icons/clusters.svg"
+            alt="simcheck"
+            width="24"
+            height="24"
+          />
+        </span>
 
-                <div class="collapse navbar-collapse" id="navbarColor01">
-                    <ul class="navbar-nav me-4 mb-2 mb-lg-0">
-                        <li class="nav-item">
-                            <a class="nav-link active" href="/html/import.html"
-                                >Import</a
-                            >
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/html/cluster.html"
-                                >Cluster</a
-                            >
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/html/map.html">Map</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/html/options.html"
-                                >Options</a
-                            >
-                        </li>
-                        <li class="nav-item">
-                            <a
-                                class="nav-link"
-                                href="https://docs.google.com/document/d/1wnIekRglMEkagw6dsucxNRkHclpQE_ptwkIyXzNvQ1s/"
-                                >Help</a
-                            >
-                        </li>
-                    </ul>
-                    <div class="input-group d-flex">
-                        <input
-                            type="text"
-                            class="form-control"
-                            placeholder="search related content"
-                            id="query"
-                            autocomplete="off"
-                        />
-                        <div class="col-2">
-                            <select
-                                class="form-select"
-                                id="tableSelect"
-                            ></select>
-                        </div>
-                        <button
-                            class="btn btn-primary"
-                            type="button"
-                            id="search"
-                        >
-                            search
-                        </button>
-                    </div>
-                </div>
+        <div class="collapse navbar-collapse" id="navbarColor01">
+          <ul class="navbar-nav me-4 mb-2 mb-lg-0">
+            <li class="nav-item">
+              <a class="nav-link active" href="/html/import.html">Import</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="/html/cluster.html">Cluster</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="/html/map.html">Map</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="/html/options.html">Options</a>
+            </li>
+            <li class="nav-item">
+              <a
+                class="nav-link"
+                href="https://docs.google.com/document/d/1wnIekRglMEkagw6dsucxNRkHclpQE_ptwkIyXzNvQ1s/"
+                >Help</a
+              >
+            </li>
+          </ul>
+          <div class="input-group d-flex">
+            <input
+              type="text"
+              class="form-control"
+              placeholder="search related content"
+              id="query"
+              autocomplete="off"
+            />
+            <div class="col-2">
+              <select class="form-select" id="tableSelect"></select>
             </div>
-        </nav>
-        <div class="container-fluid mt-1 mb-4">
-            <div class="card mb-1">
-                <div class="card-body">
-                    <div class="progress px-0 shadow-sm">
-                        <div
-                            id="progress"
-                            class="progress-bar overflow-visible"
-                            role="progressbar"
-                            style="width: 0%"
-                        >
-                            -
-                        </div>
-                    </div>
-                </div>
+            <button class="btn btn-primary" type="button" id="search">
+              search
+            </button>
+          </div>
+        </div>
+      </div>
+    </nav>
+    <div class="container-fluid mt-1 mb-4">
+      <div class="card mb-1">
+        <div class="card-body">
+          <div class="progress px-0 shadow-sm">
+            <div
+              id="progress"
+              class="progress-bar overflow-visible"
+              role="progressbar"
+              style="width: 0%"
+            >
+              -
             </div>
-            <div class="card">
-                <div class="card-header bg-primary-subtle">prepare data</div>
-                <div class="card-body">
-                    <div class="row pb-3">
-                        <span class="fw-5">import .csv</span>
-                        <file-drop accept="text/csv">
-                            <div class="input-group csvLoad" id="drop-area">
-                                <input
-                                    class="form-control"
-                                    type="file"
-                                    id="fileInput"
-                                    name="fileInput"
-                                    accept="text/csv"
-                                /></div
-                        ></file-drop>
-                    </div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header bg-primary-subtle">prepare data</div>
+        <div class="card-body">
+          <div class="row pb-3">
+            <span class="fw-5">import .csv</span>
+            <file-drop accept="text/csv">
+              <div class="input-group csvLoad" id="drop-area">
+                <input
+                  class="form-control"
+                  type="file"
+                  id="fileInput"
+                  name="fileInput"
+                  accept="text/csv"
+                /></div
+            ></file-drop>
+          </div>
 
-                    <div class="row pb-2">
-                        <span class="fw-5">object storage settings</span>
-                        <div class="">
-                            <fieldset class="input-group">
-                                <label
-                                    for="saveTableInput"
-                                    class="input-group-text"
-                                    >object store name</label
-                                >
-                                <input
-                                    type="text"
-                                    class="form-control"
-                                    placeholder="select existing or create new"
-                                    id="saveTableInput"
-                                    list="saveTableList"
-                                    autocomplete="off"
-                                    required
-                                />
+          <div class="row pb-2">
+            <span class="fw-5">object storage settings</span>
+            <div class="">
+              <fieldset class="input-group">
+                <label for="saveTableInput" class="input-group-text"
+                  >object store name</label
+                >
+                <input
+                  type="text"
+                  class="form-control"
+                  placeholder="select existing or create new"
+                  id="saveTableInput"
+                  list="saveTableList"
+                  autocomplete="off"
+                  required
+                />
 
-                                <datalist id="saveTableList"> </datalist>
-                            </fieldset>
-                        </div>
-                        <div class="pb-2">
-                            <div class="input-group">
-                                <label for="idFields" class="input-group-text"
-                                    >object store id</label
-                                >
-                                <select
-                                    id="idFields"
-                                    class="form-select"
-                                ></select>
-                            </div>
-                        </div>
+                <datalist id="saveTableList"> </datalist>
+              </fieldset>
+            </div>
+            <div class="pb-2">
+              <div class="input-group">
+                <label for="idFields" class="input-group-text"
+                  >object store id</label
+                >
+                <select id="idFields" class="form-select"></select>
+              </div>
+            </div>
 
-                        <div class="mt-2">
-                            <!--
+            <div class="mt-2">
+              <!--
                             <div class="input-group">
                                 <input
                                     type="text"
@@ -157,91 +139,85 @@
                                 />
                             </div>
                             -->
-                            <div class="form-floating">
-                                <textarea
-                                    disabled
-                                    class="form-control fw-light h-auto d-inline-block"
-                                    placeholder="example text to get embedded"
-                                    id="exampleText"
-                                    style="field-sizing: content"
-                                ></textarea>
-                                <label for="exampleText" id="numberOfTokens"
-                                    >example text to get embedded</label
-                                >
-                            </div>
-                            <div class="input-group">
-                                <select
-                                    id="embeddingsFields"
-                                    class="form-control"
-                                    multiple="multiple"
-                                    placeholder="embedding text fields"
-                                ></select>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="py-2">
-                        <div class="form-check">
-                            <input
-                                class="form-check-input"
-                                type="checkbox"
-                                value=""
-                                id="keepEmbeddings"
-                                checked=""
-                            />
-                            <label
-                                class="form-check-labe w-100"
-                                for="keepEmbeddings"
-                                >keep existing embeddings</label
-                            >
-                        </div>
-                    </div>
-                    <div class="d-grid gap-2">
-                        <button
-                            type="button"
-                            class="btn btn-primary"
-                            id="generateEmbeddings"
-                        >
-                            start embedding
-                        </button>
-                        <button
-                            type="button"
-                            class="btn btn-primary"
-                            id="generateHNSW"
-                        >
-                            (re)generate HNSW for faster compare
-                        </button>
-                    </div>
-                </div>
+              <div class="form-floating">
+                <textarea
+                  disabled
+                  class="form-control fw-light h-auto d-inline-block"
+                  placeholder="example text to get embedded"
+                  id="exampleText"
+                  style="field-sizing: content"
+                ></textarea>
+                <label for="exampleText" id="numberOfTokens"
+                  >example text to get embedded</label
+                >
+              </div>
+              <div class="input-group">
+                <select
+                  id="embeddingsFields"
+                  class="form-control"
+                  multiple="multiple"
+                  placeholder="embedding text fields"
+                ></select>
+              </div>
             </div>
-
-            <div class="row">
-                <div class="input-group my-2">
-                    <label for="query" class="input-group-text"
-                        >compare object stores</label
-                    >
-                    <div class="col">
-                        <select class="form-select" id="compareTable1"></select>
-                    </div>
-                    <div class="col">
-                        <select class="form-select" id="compareTable2"></select>
-                    </div>
-                    <button class="btn btn-primary" type="button" id="compare">
-                        compare
-                    </button>
-                </div>
+          </div>
+          <div class="py-2">
+            <div class="form-check">
+              <input
+                class="form-check-input"
+                type="checkbox"
+                value=""
+                id="keepEmbeddings"
+                checked=""
+              />
+              <label class="form-check-labe w-100" for="keepEmbeddings"
+                >keep existing embeddings</label
+              >
             </div>
-            <div class="row mx-1 pb-2 bg-body">
-                <table id="dataTable"></table>
-            </div>
+          </div>
+          <div class="d-grid gap-2">
+            <button
+              type="button"
+              class="btn btn-primary"
+              id="generateEmbeddings"
+            >
+              start embedding
+            </button>
+            <button type="button" class="btn btn-primary" id="generateHNSW">
+              (re)generate HNSW for faster compare
+            </button>
+          </div>
         </div>
+      </div>
 
-        <script src="/libs/jquery.min.js"></script>
+      <div class="row">
+        <div class="input-group my-2">
+          <label for="query" class="input-group-text"
+            >compare object stores</label
+          >
+          <div class="col">
+            <select class="form-select" id="compareTable1"></select>
+          </div>
+          <div class="col">
+            <select class="form-select" id="compareTable2"></select>
+          </div>
+          <button class="btn btn-primary" type="button" id="compare">
+            compare
+          </button>
+        </div>
+      </div>
+      <div class="row mx-1 pb-2 bg-body">
+        <table id="dataTable"></table>
+      </div>
+    </div>
 
-        <script src="/libs/bootstrap-table.min.v1.22.4.js"></script>
-        <script src="/libs/tableExport.min.v1.27.0.js"></script>
-        <script src="/libs/bootstrap-table-export.min.v1.22.4.js"></script>
+    <script src="/libs/jquery.min.js"></script>
 
-        <script src="/libs/select2.min.js"></script>
-        <script src="/js/import.js" type="module"></script>
-    </body>
+    <script src="/libs/bootstrap-table.min.v1.22.4.js"></script>
+    <script src="/libs/tableExport.min.v1.27.0.js"></script>
+    <script src="/libs/bootstrap-table-export.min.v1.22.4.js"></script>
+
+    <script src="/libs/select2.min.js"></script>
+    <script src="/js/import.js" type="module"></script>
+  </body>
 </html>

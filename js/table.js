@@ -110,7 +110,7 @@ function getTableData() {
 }
 
 async function generateTable(dataArray) {
-  if (dataArray.length == 0) {
+  if (dataArray.length === 0) {
     return;
   }
 
@@ -157,11 +157,14 @@ function convertTypedArrays(obj) {
 
 function sanitizeFilename(input) {
   // Replace any invalid characters for Windows or macOS with an underscore
-  return input
-    .replace(/[\/\\?%*:|"<>]/g, "_") // Windows forbidden characters
-    .replace(/[\0-\x1F\x80-\x9F]/g, "_") // Control characters
-    .replace(/^\.+$/, "_") // Avoid names that are just dots
-    .trim(); // Remove any leading or trailing spaces
+  return (
+    input
+      .replace(/[/\\?%*:|"<>]/g, "_") // Windows forbidden characters
+      // eslint-disable-next-line no-control-regex -- deliberately strips control characters (\x00-\x1F, \x80-\x9F) from filenames
+      .replace(/[\0-\x1F\x80-\x9F]/g, "_") // Control characters
+      .replace(/^\.+$/, "_") // Avoid names that are just dots
+      .trim()
+  ); // Remove any leading or trailing spaces
 }
 
 function saveDataAsFile(filename, type, data) {

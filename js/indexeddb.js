@@ -243,8 +243,8 @@ async function getAllKeys(settings) {
 }
 
 async function saveData(settings, dataArray, keySet, progressFunction) {
-  return new Promise(async (resolve, reject) => {
-    const db = await openForWrite(settings);
+  const db = await openForWrite(settings);
+  return new Promise((resolve, reject) => {
     const transaction = db.transaction([settings.tableName], "readwrite");
     let store = transaction.objectStore(settings.tableName);
 
@@ -294,8 +294,8 @@ async function saveData(settings, dataArray, keySet, progressFunction) {
 }
 
 async function addData(settings, dataArray, keySet, progressFunction) {
-  return new Promise(async (resolve, reject) => {
-    const db = await openForWrite(settings);
+  const db = await openForWrite(settings);
+  return new Promise((resolve, reject) => {
     const transaction = db.transaction([settings.tableName], "readwrite");
     let store = transaction.objectStore(settings.tableName);
 
@@ -375,7 +375,9 @@ async function getFilteredData(settings, keyPathSet) {
       };
     });
   } catch (error) {
-    throw new Error(`Failed to open database: ${error.message}`);
+    throw new Error(`Failed to open database: ${error.message}`, {
+      cause: error,
+    });
   }
 }
 
@@ -410,7 +412,9 @@ async function getAllData(settings) {
       };
     });
   } catch (error) {
-    throw new Error(`Failed to open database: ${error.message}`);
+    throw new Error(`Failed to open database: ${error.message}`, {
+      cause: error,
+    });
   }
 }
 

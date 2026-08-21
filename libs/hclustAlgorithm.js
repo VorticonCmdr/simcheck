@@ -1,6 +1,12 @@
-import { getAllData } from "/js/indexeddb.js";
-import { cos_sim } from "/libs/transformers.min.js";
-const invertedCosineSimilarity = (vecA, vecB) => 1 - cos_sim(vecA, vecB);
+import { cosineSimilarity } from "/libs/similarity.js";
+
+// Shared hierarchical-clustering engine used by both js/clustering.js
+// (background-routed) and js/hclust-worker.js (Worker-routed, spawned by
+// js/cluster.js) -- previously two independently hand-rolled copies that had
+// already drifted (only one of them filtered out rows missing an embedding).
+
+const invertedCosineSimilarity = (vecA, vecB) =>
+  1 - cosineSimilarity(vecA, vecB);
 
 const euclideanDistance = (a, b) => {
   const size = Math.min(a.length, b.length);
@@ -18,36 +24,30 @@ const averageDistance = (setA, setB, distances) => {
   return distance / setA.length / setB.length;
 };
 
-const updateProgress = (stepNumber, stepProgress, onProgress, startTime) => {
-  const progress = stepNumber / 2 + stepProgress / 2;
-
-  const estimateTimeRemaining = (startTime, progress) => {
-    const elapsedTime = Date.now() - startTime;
-    const estimatedTotalTime = elapsedTime / progress;
-    return estimatedTotalTime - elapsedTime;
-  };
-
-  const timeRemaining = estimateTimeRemaining(startTime, progress);
-
-  const formatTime = (milliseconds) => {
-    const totalSeconds = Math.floor(milliseconds / 1000);
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-    return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
-  };
-
-  const formattedTimeRemaining = formatTime(timeRemaining);
-
-  onProgress({
-    type: "loading",
-    status: "agglomerative hierarchical clustering",
-    name: `${formattedTimeRemaining} remaining`,
-    progress,
-  });
+const estimateTimeRemaining = (startTime, progress) => {
+  const elapsedTime = Date.now() - startTime;
+  const estimatedTotalTime = elapsedTime / progress;
+  return estimatedTotalTime - elapsedTime;
 };
 
-const logProgress = (progress) =>
+const formatTime = (milliseconds) => {
+  const totalSeconds = Math.floor(milliseconds / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+};
+
+// Reports progress as { progress, name } -- callers adapt that into whatever
+// shape their own transport needs (sendMessage's broadcast vs. a Worker's
+// postMessage), so this stays agnostic of who's consuming it.
+const updateProgress = (stepNumber, stepProgress, onProgress, startTime) => {
+  const progress = stepNumber / 2 + stepProgress / 2;
+  const name = `${formatTime(estimateTimeRemaining(startTime, progress))} remaining`;
+  onProgress({ progress, name });
+};
+
+const logProgress = ({ progress }) =>
   console.log("Clustering: ", (progress * 100).toFixed(1) + "%");
 
 const clusterData = ({
@@ -121,43 +121,6 @@ const clusterData = ({
   };
 };
 
-function calculateEuclideanDistance(x1, y1, x2, y2) {
-  return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
-}
-
-function findElbowPoint(variances) {
-  const nPoints = variances.length;
-  const firstPoint = [1, variances[0]];
-  const lastPoint = [nPoints, variances[nPoints - 1]];
-
-  let maxDistance = 0;
-  let elbowPoint = 1;
-
-  for (let i = 2; i <= nPoints; i++) {
-    const currentPoint = [i, variances[i - 1]];
-    const distance =
-      Math.abs(
-        (lastPoint[1] - firstPoint[1]) * currentPoint[0] -
-          (lastPoint[0] - firstPoint[0]) * currentPoint[1] +
-          lastPoint[0] * firstPoint[1] -
-          lastPoint[1] * firstPoint[0],
-      ) /
-      calculateEuclideanDistance(
-        firstPoint[0],
-        firstPoint[1],
-        lastPoint[0],
-        lastPoint[1],
-      );
-
-    if (distance > maxDistance) {
-      maxDistance = distance;
-      elbowPoint = i;
-    }
-  }
-
-  return elbowPoint;
-}
-
 function calculateDistance(point1, point2, distances) {
   return distances[point1][point2];
 }
@@ -211,7 +174,9 @@ function findOptimalClusters(variances) {
   return optimalClustersIndex;
 }
 
-async function loopTables(data) {
+// Loads the rows to cluster across one or more object stores. Both callers
+// need identical shape: an array of {databaseName, tableName, keyPath} specs.
+async function loopTables(data, getAllData) {
   let resultData = [];
 
   for (let d in data) {
@@ -222,47 +187,12 @@ async function loopTables(data) {
   return resultData;
 }
 
-async function processClusterData(data, sendMessage) {
-  let tableData = await loopTables(data);
-
-  let embeddings = tableData.map((row) => {
-    return {
-      id: row[data[0].keyPath],
-      value: row.embeddings[data[0].model],
-    };
-  });
-
-  let clusterResult = clusterData({
-    data: embeddings,
-    key: "value",
-    distance: invertedCosineSimilarity,
-    onProgress: sendMessage,
-  });
-
-  let variances = [];
-  for (let r = 0; r < clusterResult.distances.length; r++) {
-    let v = calculateWithinClusterVariance(
-      clusterResult.clustersGivenK,
-      clusterResult.distances,
-      r,
-    );
-    variances.push(v);
-  }
-  let p0 = findOptimalClusters(variances);
-
-  let ids = {};
-  clusterResult.clustersGivenK[p0].forEach((cluster, clusterNumber) => {
-    cluster.forEach((point) => {
-      let id = embeddings[point]["id"];
-      let order = clusterResult.order[point];
-      ids[id] = {
-        order,
-        clusterNumber,
-      };
-    });
-  });
-
-  return ids;
-}
-
-export { processClusterData };
+export {
+  invertedCosineSimilarity,
+  euclideanDistance,
+  averageDistance,
+  clusterData,
+  calculateWithinClusterVariance,
+  findOptimalClusters,
+  loopTables,
+};
