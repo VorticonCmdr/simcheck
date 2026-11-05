@@ -1,0 +1,28 @@
+{
+  "name": "simcheck",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "watch": "vite build --watch",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.6",
+    "@types/chrome": "^0.3.7",
+    "@types/papaparse": "^5.5.2",
+    "fake-indexeddb": "^6.2.7",
+    "typescript": "^7.0.2",
+    "vite": "^6.4.5",
+    "vitest": "^3.2.7"
+  },
+  "dependencies": {
+    "@preact/signals": "^2.11.4",
+    "bootstrap": "^5.3.8",
+    "flatbush": "^4.7.0",
+    "papaparse": "^5.7.0",
+    "preact": "^11.1.1",
+    "umap-js": "^1.4.0"
+  }
+}

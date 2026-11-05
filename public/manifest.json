@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "simcheck",
+  "description": "a chrome extension to generate, compare and visualize vector embeddings",
+  "version": "0.1.0",
+  "permissions": ["storage", "unlimitedStorage", "notifications", "offscreen"],
+  "host_permissions": ["https://api.openai.com/*"],
+  "background": { "service_worker": "assets/background.js", "type": "module" },
+  "action": { "default_title": "simcheck" },
+  "options_ui": { "page": "index.html#settings", "open_in_tab": true },
+  "minimum_chrome_version": "116",
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
+  "cross_origin_embedder_policy": { "value": "require-corp" },
+  "cross_origin_opener_policy": { "value": "same-origin" },
+  "icons": {
+    "16": "icons/clusters16.png",
+    "32": "icons/clusters32.png",
+    "48": "icons/clusters48.png",
+    "128": "icons/clusters128.png"
+  }
+}

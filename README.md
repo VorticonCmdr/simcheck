@@ -7,7 +7,17 @@ a chrome extension to generate, compare and visualize vector embeddings
 ## goal
 this is not meant as an production ready product but rather an accessible entrypoint into to using embeddings for other things than RAG only
 
+## development
+```bash
+npm install
+npm run build
+```
+then load the `dist` folder at `chrome://extensions/` with "Load unpacked". `npm test` runs the tests.
+
+data from earlier versions is copied to the new format on first start.
+
 ## versions
+v0.1.0 – single-page workspace, background jobs, new storage, reworked clustering and map
 v0.0.3 – bug fixes for model changing bug
 v0.0.2 – csv export bug fix
 v0.0.1 – initial release
@@ -18,7 +28,10 @@ v0.0.1 – initial release
 ## used libraries
 
 ### [transformers.js](https://github.com/xenova/transformers.js)
-for sentence feature extraction and cosine similarity
+for sentence feature extraction
+
+### [Preact](https://github.com/preactjs/preact)
+for the interface
 
 ### [PapaParse](https://github.com/mholt/PapaParse)
 for CSV import/parsing
@@ -26,32 +39,8 @@ for CSV import/parsing
 ### [Bootstrap](https://github.com/twbs/bootstrap)
 for nice layouts
 
-### [Bootstrap Icons](https://github.com/twbs/icons)
-nice svg icons
-
-### [Bootstrap Table](https://github.com/wenzhixin/bootstrap-table)
-for nice tables
-
-### [jQuery](https://github.com/jquery/jquery)
-for ease of Javascript use
-
-### [handlebarsJS](https://handlebarsjs.com/)
-for easy templating
-
-### [sortable](https://sortablejs.github.io/Sortable/)
-usability
-
-### [select2](https://github.com/select2/select2)
-better selects
-
-### [hlcust](https://github.com/greenelab/hclust)
-agglomerative hierarchical clustering of high-dimensional data
-
 ### [umap-js](https://github.com/PAIR-code/umap-js)
 vector projections
 
-### [density-clustering](https://github.com/uhho/density-clustering)
-fast clustering of 2d projected data
-
-### [d3](https://github.com/d3/d3)
-bring data to life with SVG
+### [Flatbush](https://github.com/mourner/flatbush)
+spatial index for clustering and the map
